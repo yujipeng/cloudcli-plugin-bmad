@@ -1,0 +1,170 @@
+# CloudCLI Plugin Starter - Project Stats
+This plugin csans the currently selected project and shows file counts, lines of code, a file-type breakdown chart, largest files, and recently modified files.
+
+This is a starter plugin for [CloudCLI Cloud](https://cloudcli.ai) and [CloudCLI UI](https://github.com/siteboon/claudecodeui) that shows project stats and demonstrates the full plugin API — frontend rendering with live context updates and a Node.js backend server with RPC communication.
+
+
+For a complete guide to the plugin system, see the [Plugin Overview](https://cloudcli.ai/docs/plugin-overview).
+
+## Installation
+
+**From git** (recommended): Open **Settings > Plugins** in CloudCLI UI, paste this repository's URL, and click **Install**. The repo is cloned, dependencies are installed, and the plugin is ready to enable.
+
+**Manual:** Clone or copy this repository into your plugins directory:
+
+```bash
+git clone <repo-url> ~/.claude-code-ui/plugins/project-stats
+```
+
+Then open **Settings > Plugins** — "Project Stats" should appear. Enable it to add the tab.
+
+## Plugin structure
+
+```
+project-stats/
+  manifest.json   # Required — plugin metadata
+  index.js        # Required — frontend entry point (ES module)
+  server.js       # Optional — backend entry point (Node.js subprocess)
+```
+
+## How it works
+
+Plugins are ES modules loaded directly into the CloudCLI UI host app. The host calls your exported `mount(container, api)` function when the plugin tab is activated and `unmount(container)` when it is torn down.
+
+Plugins that need server-side logic can declare a `"server"` entry in their manifest. The host spawns it as a child process and proxies requests to it via `api.rpc()`.
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  CloudCLI UI Host                                       │
+│                                                         │
+│  Plugin subprocess (server.js):                         │
+│    Runs as a child process with restricted env          │
+│    Listens on random local port                         │
+│    Receives secrets via X-Plugin-Secret-* headers       │
+└───────────┬─────────────────────────┬───────────────────┘
+            │ serves static files     │ proxies RPC
+┌───────────▼─────────────────────────▼───────────────────┐
+│  Frontend (browser)                                     │
+│                                                         │
+│  Plugin module (index.js)                               │
+│    import(url) → mount(container, api)                  │
+│    api.context          — theme / project / session     │
+│    api.onContextChange  — subscribe to changes          │
+│    api.rpc(method, path, body) → Promise                │
+└─────────────────────────────────────────────────────────┘
+```
+
+## Frontend — Module API
+
+The host dynamically imports your entry file and calls `mount(container, api)`. Render any UI inside the container — plain HTML, styled components, charts, dashboards, anything you can build with vanilla JavaScript and the DOM.
+
+```js
+export function mount(container, api) {
+  // api.context — current snapshot: { theme, project, session }
+  // api.onContextChange(cb) — subscribe, returns an unsubscribe function
+  // api.rpc(method, path, body?) — call the plugin's server subprocess
+
+  container.innerHTML = '<p>Hello!</p>';
+
+  const unsub = api.onContextChange((ctx) => {
+    container.style.background = ctx.theme === 'dark' ? '#111' : '#fff';
+  });
+
+  container._cleanup = unsub;
+}
+
+export function unmount(container) {
+  if (typeof container._cleanup === 'function') container._cleanup();
+  container.innerHTML = '';
+}
+```
+
+### Context object
+
+```js
+api.context
+// {
+//   theme:   "dark" | "light",
+//   project: { name: string, path: string } | null,
+//   session: { id: string, title: string } | null,
+// }
+```
+
+### RPC helper
+
+```js
+const data = await api.rpc('GET', '/hello');
+const result = await api.rpc('POST', '/echo', { greeting: 'hi' });
+```
+
+## Backend — Server subprocess
+
+Plugins that need filesystem access, external APIs, npm packages, or persistent state can declare a `"server"` entry in their manifest. The host manages the lifecycle:
+
+1. When the plugin is enabled, the host spawns `node server.js`
+2. The subprocess **must** print a JSON line to stdout: `{"ready": true, "port": 12345}`
+3. The host proxies requests from `api.rpc()` to that port
+4. When the plugin is disabled or uninstalled, the host sends SIGTERM
+
+### Secrets
+
+Per-plugin secrets are configured in **Settings > Plugins** and injected as HTTP headers on every proxied request (`x-plugin-secret-<name>`). They are never stored in the subprocess environment.
+
+### Restricted environment
+
+The subprocess runs with a minimal env — only `PATH`, `HOME`, `NODE_ENV`, and `PLUGIN_NAME`. It does not inherit the host's API keys or other secrets.
+
+## manifest.json
+
+```jsonc
+{
+  "name": "project-stats",      // Unique id — alphanumeric, hyphens, underscores
+  "displayName": "Project Stats", // Shown in the UI
+  "version": "1.0.0",
+  "description": "Short description shown in settings.",
+  "author": "Your Name",
+  "icon": "Puzzle",             // Lucide icon name
+  "type": "module",             // Must be "module"
+  "slot": "tab",                // Where the plugin appears — only "tab" today
+  "entry": "index.js",          // Frontend entry file
+  "server": "server.js",        // Optional — backend entry file
+  "permissions": []              // Reserved for future use
+}
+```
+
+### Available icons
+
+`Puzzle` (default), `Box`, `Database`, `Globe`, `Terminal`, `Wrench`, `Zap`, `BarChart3`, `Folder`, `MessageSquare`, `GitBranch`
+
+## Constraints
+
+Plugins cannot:
+
+- Modify built-in tabs or appear outside the tab area
+- Interact with Claude's chat system
+- Communicate with other plugins
+- Access authentication tokens or intercept requests
+
+## Security & Trust Model
+
+> **Plugins run at your own risk.** A plugin's frontend code executes in the
+> same JavaScript context as the host application — there is no runtime
+> sandbox. Only install plugins whose source code you have reviewed or that
+> come from authors you trust.
+
+CloudCLI follows a trust-through-transparency model: plugins are installed
+from git repositories with visible source, not from an anonymous marketplace.
+You are responsible for reviewing plugin code before installing.
+
+**Frontend** — Plugin modules run in the same JS context as the host and only receive the `api` object. All server communication goes through `api.rpc()`. However, because there is no runtime sandbox, a malicious plugin could in principle reach beyond the provided API.
+
+**Backend** — The subprocess runs as a separate OS process with restricted env, per-call secret injection via headers, and process-level isolation. Auth headers are stripped before proxying.
+
+**Install-time** — npm `postinstall` scripts are blocked (`--ignore-scripts`). Ship pre-built or use packages that work without postinstall hooks.
+
+## Contributing to the official plugin repository
+
+If you've built a plugin and would like it added to the official CloudCLI UI plugin repository, [open an issue](https://github.com/siteboon/claudecodeui/issues) with a link to your plugin's repository. The team will review it for inclusion.
+
+## License
+MIT
