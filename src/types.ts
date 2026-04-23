@@ -1,44 +1,64 @@
-/**
- * CloudCLI Plugin API type definitions.
- *
- * These types describe the API object passed to your plugin's mount() function
- * by the CloudCLI UI host. Copy this file into your own plugin to get full
- * type-safety and editor autocomplete.
- */
-
-/** Current application context provided to the plugin. */
 export interface PluginContext {
-  /** Active UI theme. */
   theme: 'dark' | 'light';
-  /** Currently selected project, or null if none. */
   project: { name: string; path: string } | null;
-  /** Currently active session, or null if none. */
   session: { id: string; title: string } | null;
 }
 
-/** The API object received in mount(container, api). */
 export interface PluginAPI {
-  /** Current context snapshot (always returns the latest values). */
   readonly context: PluginContext;
-
-  /**
-   * Subscribe to context changes (theme, project, session).
-   * @returns An unsubscribe function.
-   */
   onContextChange(callback: (ctx: PluginContext) => void): () => void;
-
-  /**
-   * Call the plugin's backend server through the host proxy.
-   * @param method  HTTP method (GET, POST, PUT, DELETE, etc.)
-   * @param path    Request path on the plugin server (leading "/" is optional)
-   * @param body    Optional JSON-serializable request body
-   * @returns Parsed JSON response from the server
-   */
   rpc(method: string, path: string, body?: unknown): Promise<unknown>;
 }
 
-/** Shape a plugin entry module must satisfy. */
 export interface PluginModule {
   mount(container: HTMLElement, api: PluginAPI): void | Promise<void>;
   unmount?(container: HTMLElement): void;
+}
+
+// ── Bmad Flow types ───────────────────────────────────────────────────
+
+export type Phase = 'discovery' | 'planning' | 'design' | 'development' | 'retrospective';
+export type PhaseStatus = 'pending' | 'active' | 'done';
+export type StoryStatus = 'backlog' | 'ready-for-dev' | 'in-progress' | 'review' | 'done';
+
+export interface PhaseInfo {
+  phase: Phase;
+  label: string;
+  icon: string;
+  status: PhaseStatus;
+}
+
+export interface NextAction {
+  phase: Phase;
+  command: string;
+  agent: string;
+  agentIcon: string;
+  quote: string;
+}
+
+export interface StoryEntry {
+  key: string;
+  status: StoryStatus;
+}
+
+export interface EpicEntry {
+  key: string;
+  status: string;
+  stories: StoryEntry[];
+  retroStatus?: string;
+}
+
+export interface SprintData {
+  project: string;
+  epics: EpicEntry[];
+  totalStories: number;
+  doneStories: number;
+}
+
+export interface FlowData {
+  phases: PhaseInfo[];
+  nextAction: NextAction | null;
+  sprint: SprintData | null;
+  bmadDetected: boolean;
+  configSource: string;
 }
