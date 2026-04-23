@@ -127,39 +127,39 @@ interface Rule {
 const RULES: Rule[] = [
   {
     condition: (a) => !a.productBrief && !a.prd,
-    action: { phase: 'discovery', command: '/bmad:product-brief', agent: 'Mary', agentIcon: '📊', quote: '咱们先把用户画像摸清楚？' },
+    action: { phase: 'discovery', command: '/bmad-product-brief', agent: 'Mary', agentIcon: '📊', quote: '咱们先把用户画像摸清楚？' },
   },
   {
     condition: (a) => !a.prd,
-    action: { phase: 'planning', command: '/bmad:create-prd', agent: 'John', agentIcon: '📋', quote: '需求不清不动手，先把 PRD 写扎实。' },
+    action: { phase: 'planning', command: '/bmad-create-prd', agent: 'John', agentIcon: '📋', quote: '需求不清不动手，先把 PRD 写扎实。' },
   },
   {
     condition: (a) => !a.architecture,
-    action: { phase: 'design', command: '/bmad:create-architecture', agent: 'Winston', agentIcon: '🏗️', quote: '地基不牢，地动山摇。来设计架构。' },
+    action: { phase: 'design', command: '/bmad-create-architecture', agent: 'Winston', agentIcon: '🏗️', quote: '地基不牢，地动山摇。来设计架构。' },
   },
   {
     condition: (a) => !a.uxDesign,
-    action: { phase: 'design', command: '/bmad:create-ux-design', agent: 'Sally', agentIcon: '🎨', quote: '用户怎么用？先画交互再写码。' },
+    action: { phase: 'design', command: '/bmad-create-ux-design', agent: 'Sally', agentIcon: '🎨', quote: '用户怎么用？先画交互再写码。' },
   },
   {
     condition: (a) => !a.epics,
-    action: { phase: 'planning', command: '/bmad:create-epics-and-stories', agent: 'John', agentIcon: '📋', quote: '把需求拆成可执行的 Epic 和 Story。' },
+    action: { phase: 'planning', command: '/bmad-create-epics-and-stories', agent: 'John', agentIcon: '📋', quote: '把需求拆成可执行的 Epic 和 Story。' },
   },
   {
     condition: (a) => a.epics && !a.sprintStatus,
-    action: { phase: 'development', command: '/bmad:sprint-planning', agent: 'Amelia', agentIcon: '💻', quote: '排好优先级，开干。' },
+    action: { phase: 'development', command: '/bmad-sprint-planning', agent: 'Amelia', agentIcon: '💻', quote: '排好优先级，开干。' },
   },
   {
     condition: (_, s) => !!s && s.epics.some(e => e.stories.some(st => st.status === 'ready-for-dev')),
-    action: { phase: 'development', command: '/bmad:dev-story', agent: 'Amelia', agentIcon: '💻', quote: '有 story 等着开发，冲！' },
+    action: { phase: 'development', command: '/bmad-dev-story', agent: 'Amelia', agentIcon: '💻', quote: '有 story 等着开发，冲！' },
   },
   {
     condition: (_, s) => !!s && s.epics.some(e => e.stories.some(st => st.status === 'review')),
-    action: { phase: 'development', command: '/bmad:code-review', agent: 'Amelia', agentIcon: '💻', quote: '代码写完了，该 review 了。' },
+    action: { phase: 'development', command: '/bmad-code-review', agent: 'Amelia', agentIcon: '💻', quote: '代码写完了，该 review 了。' },
   },
   {
     condition: (_, s) => !!s && s.epics.every(e => e.status === 'done'),
-    action: { phase: 'retrospective', command: '/bmad:retrospective', agent: 'Bob', agentIcon: '🏃', quote: '全部完成！来复盘总结经验。' },
+    action: { phase: 'retrospective', command: '/bmad-retrospective', agent: 'Bob', agentIcon: '🏃', quote: '全部完成！来复盘总结经验。' },
   },
 ];
 
@@ -167,7 +167,7 @@ function computeNextAction(a: ArtifactMap, sprint: SprintData | null): NextActio
   for (const rule of RULES) {
     if (rule.condition(a, sprint)) return rule.action;
   }
-  return { phase: 'development', command: '/bmad:create-story', agent: 'Amelia', agentIcon: '💻', quote: '继续创建下一个 Story。' };
+  return { phase: 'development', command: '/bmad-create-story', agent: 'Amelia', agentIcon: '💻', quote: '继续创建下一个 Story。' };
 }
 
 // ── Sprint status parser ──────────────────────────────────────────────
