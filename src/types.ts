@@ -1,5 +1,8 @@
+export type Locale = 'zh-CN' | 'en';
+
 export interface PluginContext {
   theme: 'dark' | 'light';
+  locale?: Locale;
   project: { name: string; path: string } | null;
   session: { id: string; title: string } | null;
 }
