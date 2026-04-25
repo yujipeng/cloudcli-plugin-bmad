@@ -16,7 +16,7 @@ classification:
 
 # 产品需求文档 — Bmad Flow V2
 
-**作者：** TCXY Engineer
+**作者：** Engineer
 **日期：** 2026-04-24
 **版本：** 2.1（验证修订版）
 

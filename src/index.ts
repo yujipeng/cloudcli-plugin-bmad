@@ -167,7 +167,7 @@ const INIT_CMD = `npx bmad-method install \\
   --directory . \\
   --modules bmm \\
   --tools claude-code,cursor,codex,gemini \\
-  --user-name "TCXY Engineer" \\
+  --user-name "Engineer" \\
   --communication-language Chinese \\
   --document-output-language Chinese \\
   --output-folder docs \\

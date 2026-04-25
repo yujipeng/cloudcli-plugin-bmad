@@ -3,7 +3,7 @@
   "displayName": "Bmad Flow",
   "version": "0.1.0",
   "description": "Bmad 方法论流程看板与引导 — 认知工作台",
-  "author": "Tcxy",
+  "author": "yujipeng",
   "icon": "icon.svg",
   "type": "module",
   "slot": "tab",

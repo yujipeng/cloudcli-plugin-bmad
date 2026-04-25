@@ -5,7 +5,7 @@ inputDocuments:
   - docs/planning-artifacts/prd.md
 workflowType: 'architecture'
 project_name: 'cloudcli-plugin-starter'
-user_name: 'TCXY Engineer'
+user_name: 'Engineer'
 date: '2026-04-24'
 lastStep: 8
 status: 'complete'
