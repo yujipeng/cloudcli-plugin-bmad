@@ -101,7 +101,7 @@ function computePhases(a: ArtifactMap, sprint: SprintData | null): PhaseInfo[] {
   const has = (v: boolean) => v;
   const discoveryDone = has(a.productBrief) || has(a.prd);
   const planningDone = has(a.prd) && has(a.epics);
-  const designDone = has(a.architecture) && has(a.uxDesign);
+  const designDone = has(a.architecture);
   const devActive = a.sprintStatus && sprint !== null;
   const allDone = sprint ? sprint.epics.every(e => e.status === 'done') : false;
 
@@ -138,8 +138,8 @@ const RULES: Rule[] = [
     action: { phase: 'design', command: '/bmad-create-architecture', agent: 'Winston', agentIcon: '🏗️', quote: '地基不牢，地动山摇。来设计架构。' },
   },
   {
-    condition: (a) => !a.uxDesign,
-    action: { phase: 'design', command: '/bmad-create-ux-design', agent: 'Sally', agentIcon: '🎨', quote: '用户怎么用？先画交互再写码。' },
+    condition: (a) => !a.uxDesign && !a.epics,
+    action: { phase: 'design', command: '/bmad-create-ux-design', agent: 'Sally', agentIcon: '🎨', quote: '有 UI？可以先做 UX 设计，也可以跳过直接拆 Epic。', optional: true },
   },
   {
     condition: (a) => !a.epics,

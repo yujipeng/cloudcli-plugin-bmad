@@ -37,6 +37,7 @@ export interface NextAction {
   agent: string;
   agentIcon: string;
   quote: string;
+  optional?: boolean;
 }
 
 export interface StoryEntry {
