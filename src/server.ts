@@ -106,7 +106,8 @@ function computePhases(a: ArtifactMap, sprint: SprintData | null): PhaseInfo[] {
   const planningDone = has(a.prd) && has(a.epics);
   const designDone = has(a.architecture);
   const devActive = a.sprintStatus && sprint !== null;
-  const allDone = sprint ? sprint.epics.every(e => e.status === 'done') : false;
+  const allStoriesDone = sprint ? sprint.epics.every(e => e.status === 'done') : false;
+  const allRetrosDone = sprint ? sprint.epics.length > 0 && sprint.epics.every(e => e.retroStatus === 'done') : false;
 
   const s = (done: boolean, active: boolean): PhaseStatus =>
     done ? 'done' : active ? 'active' : 'pending';
@@ -115,8 +116,8 @@ function computePhases(a: ArtifactMap, sprint: SprintData | null): PhaseInfo[] {
     { phase: 'discovery', label: 'Discovery', icon: '🔍', status: s(discoveryDone, !discoveryDone) },
     { phase: 'planning', label: 'Planning', icon: '📋', status: s(planningDone, discoveryDone && !planningDone) },
     { phase: 'design', label: 'Design', icon: '🏗️', status: s(designDone, planningDone && !designDone) },
-    { phase: 'development', label: 'Development', icon: '💻', status: s(allDone, !!devActive && !allDone) },
-    { phase: 'retrospective', label: 'Retrospective', icon: '🔄', status: s(false, allDone) },
+    { phase: 'development', label: 'Development', icon: '💻', status: s(allStoriesDone, !!devActive && !allStoriesDone) },
+    { phase: 'retrospective', label: 'Retrospective', icon: '🔄', status: s(allRetrosDone, allStoriesDone && !allRetrosDone) },
   ];
 }
 
@@ -161,7 +162,7 @@ const RULES: Rule[] = [
     action: { phase: 'development', command: '/bmad-code-review', agent: 'Amelia', agentIcon: '💻', quote: '代码写完了，该 review 了。' },
   },
   {
-    condition: (_, s) => !!s && s.epics.every(e => e.status === 'done'),
+    condition: (_, s) => !!s && s.epics.every(e => e.status === 'done') && s.epics.some(e => e.retroStatus !== 'done'),
     action: { phase: 'retrospective', command: '/bmad-retrospective', agent: 'Bob', agentIcon: '🏃', quote: '全部完成！来复盘总结经验。' },
   },
 ];
@@ -170,7 +171,7 @@ function computeNextAction(a: ArtifactMap, sprint: SprintData | null): NextActio
   for (const rule of RULES) {
     if (rule.condition(a, sprint)) return rule.action;
   }
-  return { phase: 'development', command: '/bmad-create-story', agent: 'Amelia', agentIcon: '💻', quote: '继续创建下一个 Story。' };
+  return null;
 }
 
 // ── Sprint status parser ──────────────────────────────────────────────
