@@ -66,3 +66,31 @@ export interface FlowData {
   bmadDetected: boolean;
   configSource: string;
 }
+
+// ── Methodology types ────────────────────────────────────────────────
+
+export type MethodologyCategory = 'workflow' | 'agent' | 'tool';
+
+export interface MethodologyItem {
+  skill: string;
+  displayName: string;
+  menuCode: string;
+  description: string;
+  required: boolean;
+  category: MethodologyCategory;
+  phase: string;
+}
+
+export interface MethodologyGroup {
+  phase: string;
+  displayName: string;
+  items: MethodologyItem[];
+}
+
+export interface MethodologyResponse {
+  groups: MethodologyGroup[];
+  warning?: string;
+  error?: string;
+  partialFailure?: boolean;
+  skippedRows?: number;
+}

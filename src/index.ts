@@ -1,4 +1,6 @@
-import type { PluginAPI, PluginContext, FlowData, PhaseInfo, NextAction, SprintData, EpicEntry, Locale } from './types.js';
+import type { PluginAPI, PluginContext, FlowData, PhaseInfo, NextAction, SprintData, EpicEntry, Locale, MethodologyResponse } from './types.js';
+import { renderMethodology, renderMethodologySkeleton, bindMethodologyEvents } from './methodologyRender.js';
+import { bindMethodologyInteractions } from './methodologyState.js';
 
 // ── i18n ──────────────────────────────────────────────────────────────
 
@@ -223,6 +225,7 @@ function esc(s: string): string {
 export function mount(container: HTMLElement, api: PluginAPI): void {
   ensureAssets();
   let cachedPath = '';
+  let methodologyData: MethodologyResponse | null = null;
 
   const root = document.createElement('div');
   Object.assign(root.style, { height: '100%', overflowY: 'auto', boxSizing: 'border-box', padding: '24px', fontFamily: MONO });
@@ -271,9 +274,13 @@ export function mount(container: HTMLElement, api: PluginAPI): void {
       return;
     }
 
-    root.innerHTML = `<div class="bf-up" style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px"><div style="min-width:0;flex:1"><div style="font-size:1.1rem;font-weight:700;word-break:break-all">${name}<span style="color:${c.accent}">▌</span></div><div style="font-size:0.65rem;color:${c.muted};margin-top:4px;word-break:break-all">${projPath}</div></div><button id="bf-refresh" style="flex-shrink:0;margin-left:16px;padding:5px 12px;background:transparent;border:1px solid ${c.border};color:${c.muted};font-family:${MONO};font-size:0.65rem;border-radius:3px;cursor:pointer">${t.refresh}</button></div>${renderPhases(data.phases, c, t)}${data.nextAction ? renderNextAction(data.nextAction, c, t) : ''}${data.sprint ? renderSprint(data.sprint, c, t) : ''}`;
+    root.innerHTML = `<div class="bf-up" style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px"><div style="min-width:0;flex:1"><div style="font-size:1.1rem;font-weight:700;word-break:break-all">${name}<span style="color:${c.accent}">▌</span></div><div style="font-size:0.65rem;color:${c.muted};margin-top:4px;word-break:break-all">${projPath}</div></div><button id="bf-refresh" style="flex-shrink:0;margin-left:16px;padding:5px 12px;background:transparent;border:1px solid ${c.border};color:${c.muted};font-family:${MONO};font-size:0.65rem;border-radius:3px;cursor:pointer">${t.refresh}</button></div>${renderPhases(data.phases, c, t)}${data.nextAction ? renderNextAction(data.nextAction, c, t) : ''}${data.sprint ? renderSprint(data.sprint, c, t) : ''}${methodologyData ? renderMethodology(methodologyData, c, MONO) : ''}`;
 
     root.querySelector('#bf-refresh')?.addEventListener('click', () => load(api.context));
+    bindMethodologyEvents(root);
+    if (methodologyData) {
+      bindMethodologyInteractions(root, c, copyToClipboard);
+    }
     const copyBtn = root.querySelector('#bf-copy') as HTMLButtonElement | null;
     if (copyBtn && data.nextAction) {
       const cmd = data.nextAction.command;
@@ -290,8 +297,12 @@ export function mount(container: HTMLElement, api: PluginAPI): void {
     if (!ctx.project) { render(ctx, null); return; }
     render(ctx, null);
     try {
-      const data = (await api.rpc('GET', `flow?path=${encodeURIComponent(ctx.project.path)}`)) as FlowData;
+      const [data, methData] = await Promise.all([
+        api.rpc('GET', `flow?path=${encodeURIComponent(ctx.project.path)}`) as Promise<FlowData>,
+        api.rpc('GET', `methodology?path=${encodeURIComponent(ctx.project.path)}`).then(d => d as MethodologyResponse).catch(() => null),
+      ]);
       cachedPath = ctx.project.path;
+      methodologyData = data.bmadDetected ? methData : null;
       render(ctx, data);
     } catch (err) {
       const c = tc(ctx.theme === 'dark');

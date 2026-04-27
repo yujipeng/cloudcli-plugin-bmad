@@ -1,6 +1,9 @@
+# 安装启动相关文件目录
 dist/
 node_modules/
 
+# mac 相关目录
+.DS_Store
 
 # bmad 安装 相关目录
 .agents/

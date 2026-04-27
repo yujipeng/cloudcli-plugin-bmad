@@ -4,7 +4,10 @@ import path from 'node:path';
 import type {
   Phase, PhaseStatus, PhaseInfo, NextAction,
   StoryStatus, StoryEntry, EpicEntry, SprintData, FlowData,
+  MethodologyResponse,
 } from './types.js';
+import { parseMethodologyCsv } from './methodologyParser.js';
+import { groupByPhase } from './methodologyViewModel.js';
 
 // ── Minimal YAML parser (flat key:value + nested map + comments) ──────
 
@@ -227,6 +230,55 @@ function safePath(raw: string): string {
   return resolved;
 }
 
+// ── Methodology endpoint ─────────────────────────────────────────────
+
+interface CacheEntry {
+  mtime: number;
+  data: MethodologyResponse;
+}
+
+const methodologyCache = new Map<string, CacheEntry>();
+
+function getMethodologyData(projectPath: string): MethodologyResponse {
+  const p = safePath(projectPath);
+  const csvPath = path.join(p, '_bmad', '_config', 'bmad-help.csv');
+
+  if (!fs.existsSync(path.join(p, '_bmad'))) {
+    return { groups: [], warning: 'no bmad directory' };
+  }
+
+  if (!fs.existsSync(csvPath)) {
+    return { groups: [], warning: 'methodology file not found' };
+  }
+
+  let stat: fs.Stats;
+  try {
+    stat = fs.statSync(csvPath);
+  } catch {
+    return { groups: [], error: 'permission denied' };
+  }
+
+  const mtime = stat.mtimeMs;
+  const cached = methodologyCache.get(csvPath);
+  if (cached && cached.mtime === mtime) {
+    return cached.data;
+  }
+
+  let csvContent: string;
+  try {
+    csvContent = fs.readFileSync(csvPath, 'utf-8');
+  } catch {
+    return { groups: [], error: 'permission denied' };
+  }
+
+  const items = parseMethodologyCsv(csvContent);
+  const groups = groupByPhase(items);
+  const data: MethodologyResponse = { groups };
+
+  methodologyCache.set(csvPath, { mtime, data });
+  return data;
+}
+
 // ── Main handler ──────────────────────────────────────────────────────
 
 function getFlowData(projectPath: string): FlowData {
@@ -263,6 +315,22 @@ function getFlowData(projectPath: string): FlowData {
 
 const server = http.createServer((req, res) => {
   res.setHeader('Content-Type', 'application/json');
+
+  if (req.method === 'GET' && req.url?.startsWith('/methodology')) {
+    try {
+      const { searchParams } = new URL(req.url, 'http://localhost');
+      const data = getMethodologyData(searchParams.get('path') ?? '');
+      if (data.error === 'permission denied') {
+        res.writeHead(403);
+      }
+      res.end(JSON.stringify(data));
+    } catch (err) {
+      const code = (err as Error).message.includes('does not exist') ? 404 : 400;
+      res.writeHead(code);
+      res.end(JSON.stringify({ error: (err as Error).message }));
+    }
+    return;
+  }
 
   if (req.method === 'GET' && req.url?.startsWith('/flow')) {
     try {

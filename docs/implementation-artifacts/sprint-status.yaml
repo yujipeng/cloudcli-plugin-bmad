@@ -1,0 +1,65 @@
+# generated: 2026-04-26T13:25:35Z
+# last_updated: 2026-04-26T14:00:00Z
+# project: bmad-flow
+# project_key: NOKEY
+# tracking_system: file-system
+# story_location: docs/implementation-artifacts
+
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+#
+# Epic Status Transitions:
+#   - backlog → in-progress: Automatically when first story is created (via create-story)
+#   - in-progress → done: Manually when all stories reach 'done' status
+#
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created in stories folder
+#   - in-progress: Developer actively working on implementation
+#   - review: Ready for code review (via Dev's code-review workflow)
+#   - done: Story completed
+#
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+#
+# WORKFLOW NOTES:
+# ===============
+# - Epic transitions to 'in-progress' automatically when first story is created
+# - Stories can be worked in parallel if team capacity allows
+# - SM typically creates next story after previous one is 'done' to incorporate learnings
+# - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
+
+generated: 2026-04-26T13:25:35Z
+last_updated: 2026-04-26T14:00:00Z
+project: bmad-flow
+project_key: NOKEY
+tracking_system: file-system
+story_location: docs/implementation-artifacts
+
+development_status:
+  epic-1: done
+  1-1-建立-methodology-数据契约与共享类型: done
+  1-2-暴露安全的-methodology-只读接口: done
+  1-3-渲染方法论导航基础分组与条目列表: done
+  1-4-提供加载态、空态与视觉语义: done
+  1-5-让导航与现有主题和国际化系统一致: done
+  epic-1-retrospective: done
+  epic-2: done
+  2-1-建立统一的交互模式检测与状态机基础: done
+  2-2-桌面端查看详情并复制命令: done
+  2-3-h5-端预览条目详情: done
+  2-4-h5-端执行复制与反馈闭环: done
+  2-5-在桌面端与-h5-端保持布局连续性: done
+  epic-2-retrospective: done
+  epic-3: done
+  3-1-处理数据错误并保证静默降级: done
+  3-2-提供复制失败的用户回退路径: done
+  3-3-支持键盘与读屏的完整无障碍路径: done
+  3-4-建立服务端契约与解析测试门禁: done
+  3-5-建立跨模态-ui-与发布前质量门禁: done
+  epic-3-retrospective: done
