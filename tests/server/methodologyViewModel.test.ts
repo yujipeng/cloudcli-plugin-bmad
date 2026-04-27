@@ -17,7 +17,7 @@ describe('groupByPhase', () => {
 
     const groups = groupByPhase(items);
     expect(groups.map(g => g.phase)).toEqual([
-      '1-analysis', '2-planning', '4-implementation', 'anytime',
+      '1-discovery', '2-planning', '4-implementation', 'anytime',
     ]);
   });
 
@@ -50,7 +50,7 @@ describe('buildMethodologySections', () => {
 
     const sections = buildMethodologySections(items);
     const phaseSection = sections.find(s => s.kind === 'phase-workflows')!;
-    expect(phaseSection.groups!.map(g => g.phase)).toEqual(['1-analysis', '2-planning', '4-implementation']);
+    expect(phaseSection.groups!.map(g => g.phase)).toEqual(['1-discovery', '2-planning', '4-implementation']);
   });
 
   it('groups agent items by agentName', () => {
@@ -88,5 +88,15 @@ describe('buildMethodologySections', () => {
 
   it('returns empty array for no items', () => {
     expect(buildMethodologySections([])).toEqual([]);
+  });
+
+  it('maps legacy phase aliases correctly', () => {
+    const items: MethodologyItem[] = [
+      item('1-analysis', 'brainstorm'),
+      item('3-solutioning', 'architecture'),
+    ];
+    const sections = buildMethodologySections(items);
+    const phaseSection = sections.find(s => s.kind === 'phase-workflows')!;
+    expect(phaseSection.groups!.map(g => g.phase)).toEqual(['1-discovery', '3-solution-design']);
   });
 });

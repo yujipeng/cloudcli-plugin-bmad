@@ -1,17 +1,22 @@
 import type { MethodologyItem, MethodologyGroup, MethodologySection, AgentGroup } from './types.js';
 
 const PHASE_ORDER = [
-  '1-analysis',
+  '1-discovery',
   '2-planning',
-  '3-solutioning',
+  '3-solution-design',
   '4-implementation',
 ];
 
 const PHASE_DISPLAY_NAMES: Record<string, string> = {
-  '1-analysis': '分析',
+  '1-discovery': '发现与分析',
   '2-planning': '规划',
-  '3-solutioning': '方案设计',
+  '3-solution-design': '方案设计',
   '4-implementation': '实现',
+};
+
+const PHASE_ALIASES: Record<string, string> = {
+  '1-analysis': '1-discovery',
+  '3-solutioning': '3-solution-design',
 };
 
 const PHASE_SET = new Set(PHASE_ORDER);
@@ -29,7 +34,10 @@ export function buildMethodologySections(items: MethodologyItem[]): MethodologyS
   const agentItems: MethodologyItem[] = [];
   const generalItems: MethodologyItem[] = [];
 
-  for (const item of items) {
+  for (let item of items) {
+    const resolved = PHASE_ALIASES[item.phase] ?? item.phase;
+    if (resolved !== item.phase) item = { ...item, phase: resolved };
+
     if (item.agentName && item.phase === 'agent') {
       agentItems.push(item);
     } else if (PHASE_SET.has(item.phase)) {
@@ -88,11 +96,12 @@ export function groupByPhase(items: MethodologyItem[]): MethodologyGroup[] {
   const grouped = new Map<string, MethodologyItem[]>();
 
   for (const item of items) {
-    const list = grouped.get(item.phase);
+    const phase = PHASE_ALIASES[item.phase] ?? item.phase;
+    const list = grouped.get(phase);
     if (list) {
       list.push(item);
     } else {
-      grouped.set(item.phase, [item]);
+      grouped.set(phase, [item]);
     }
   }
 

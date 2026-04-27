@@ -8,6 +8,7 @@ import type {
 } from './types.js';
 import { parseMethodologyCsv } from './methodologyParser.js';
 import { buildMethodologySections } from './methodologyViewModel.js';
+import { scanSkills } from './skillScanner.js';
 
 // ── Minimal YAML parser (flat key:value + nested map + comments) ──────
 
@@ -242,6 +243,31 @@ const methodologyCache = new Map<string, CacheEntry>();
 
 function getMethodologyData(projectPath: string): MethodologyResponse {
   const p = safePath(projectPath);
+
+  const skillsDir = path.join(p, '.claude', 'skills');
+  if (fs.existsSync(skillsDir)) {
+    let dirStat: fs.Stats;
+    try { dirStat = fs.statSync(skillsDir); } catch { dirStat = null as unknown as fs.Stats; }
+    if (dirStat) {
+      let entries: string[];
+      try { entries = fs.readdirSync(skillsDir); } catch { entries = []; }
+      const cacheKey = `skills:${skillsDir}`;
+      const mtime = dirStat.mtimeMs;
+      const cached = methodologyCache.get(cacheKey);
+      if (cached && cached.mtime === mtime && (cached as CacheEntry & { count?: number }).count === entries.length) {
+        return cached.data;
+      }
+      const items = scanSkills(p);
+      if (items.length > 0) {
+        const sections = buildMethodologySections(items);
+        const data: MethodologyResponse = { sections };
+        const entry = { mtime, data, count: entries.length } as CacheEntry & { count: number };
+        methodologyCache.set(cacheKey, entry);
+        return data;
+      }
+    }
+  }
+
   const csvPath = path.join(p, '_bmad', '_config', 'bmad-help.csv');
 
   if (!fs.existsSync(path.join(p, '_bmad'))) {

@@ -74,12 +74,12 @@ export type MethodologyCategory = 'workflow' | 'agent' | 'tool';
 export interface MethodologyItem {
   skill: string;
   displayName: string;
-  menuCode: string;
+  menuCode?: string;
   description: string;
   required: boolean;
   category: MethodologyCategory;
   phase: string;
-  module: string;
+  module?: string;
   agentName: string;
 }
 

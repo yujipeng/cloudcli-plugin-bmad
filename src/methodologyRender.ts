@@ -3,10 +3,12 @@ import type { MethodologyResponse, MethodologySection } from './types.js';
 interface TC { bg: string; surface: string; border: string; text: string; muted: string; accent: string; dim: string; green: string; yellow: string; red: string; }
 
 const PHASE_ICONS: Record<string, string> = {
-  '1-analysis': '🔍',
+  '1-discovery': '🔍',
   '2-planning': '📋',
-  '3-solutioning': '🏗️',
+  '3-solution-design': '🏗️',
   '4-implementation': '💻',
+  '1-analysis': '🔍',
+  '3-solutioning': '🏗️',
 };
 
 export function renderMethodologySkeleton(c: TC, mono: string): string {
@@ -47,16 +49,18 @@ function renderSection(section: MethodologySection, c: TC, itemPad: string): str
   return `<div class="bf-method-section" style="margin-bottom:4px">${sectionLabel}${content}</div>`;
 }
 
-function renderCollapsibleGroup(name: string, icon: string, items: import('./types.js').MethodologyItem[], c: TC, itemPad: string, expanded: boolean): string {
+function renderCollapsibleGroup(name: string, icon: string, items: import('./types.js').MethodologyItem[], c: TC, _itemPad: string, expanded: boolean): string {
   const count = items.length;
   const collapsed = expanded ? '' : 'bf-collapsed';
   const chevron = `<span class="bf-chevron" style="font-size:0.5rem;margin-right:6px;transition:transform 0.2s;display:inline-block${expanded ? ';transform:rotate(90deg)' : ''}">▶</span>`;
 
   const itemsHtml = items.map(item => {
-    const reqBar = item.required ? `border-left:2px solid ${c.accent};padding-left:8px;` : 'padding-left:10px;';
-    const catStyle = item.category === 'agent' ? `color:${c.accent};` : `color:${c.text};opacity:0.85;`;
-    return `<div class="bf-method-item" data-skill="${esc(item.skill)}" data-required="${item.required}" style="${reqBar}${catStyle}${itemPad}cursor:pointer;transition:background 0.15s" data-desc="${esc(item.description)}">
-      <span style="color:${c.muted};margin-right:6px">[${esc(item.menuCode)}]</span>${esc(item.displayName)}
+    const reqBar = item.required ? `border-left:2px solid ${c.accent};` : '';
+    const desc = item.description.length > 80 ? item.description.slice(0, 80) + '...' : item.description;
+    const codeTag = item.menuCode ? `<span style="color:${c.muted};font-size:0.5rem;margin-left:6px">[${esc(item.menuCode)}]</span>` : '';
+    return `<div class="bf-method-card" data-skill="${esc(item.skill)}" style="padding:6px 8px;margin:3px 0;border:1px solid ${c.border};border-radius:3px;cursor:pointer;${reqBar}transition:background 0.15s">
+      <div style="font-size:0.62rem;font-weight:600;color:${c.text}">${esc(item.displayName)}${codeTag}</div>
+      ${desc ? `<div style="font-size:0.52rem;color:${c.muted};margin-top:2px;line-height:1.3">${esc(desc)}</div>` : ''}
     </div>`;
   }).join('');
 
