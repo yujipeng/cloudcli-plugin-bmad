@@ -1,4 +1,4 @@
-import type { PluginAPI, PluginContext, FlowData, PhaseInfo, NextAction, SprintData, EpicEntry, Locale, MethodologyResponse } from './types.js';
+import type { PluginAPI, PluginContext, FlowData, PhaseInfo, NextAction, SprintData, EpicEntry, Locale, MethodologyResponse, VersionedResponse, VersionFlowData, SprintEntry } from './types.js';
 import { renderMethodology, renderMethodologySkeleton, bindMethodologyEvents } from './methodologyRender.js';
 import { bindMethodologyInteractions } from './methodologyState.js';
 
@@ -15,6 +15,8 @@ interface I18nStrings {
   selectProject: string;
   noBmadProject: string;
   noBmadHint: string;
+  version: string;
+  sprint: string;
 }
 
 const I18N: Record<Locale, I18nStrings> = {
@@ -29,6 +31,8 @@ const I18N: Record<Locale, I18nStrings> = {
     selectProject: '请选择项目',
     noBmadProject: '未检测到 Bmad 项目',
     noBmadHint: '运行以下命令初始化 Bmad 方法论：',
+    version: '版本',
+    sprint: 'Sprint',
   },
   en: {
     phases: { discovery: 'Discovery', planning: 'Planning', design: 'Design', development: 'Development', retrospective: 'Retrospective' },
@@ -41,6 +45,8 @@ const I18N: Record<Locale, I18nStrings> = {
     selectProject: 'select a project',
     noBmadProject: 'No Bmad project detected',
     noBmadHint: 'Run the following command to initialize Bmad methodology:',
+    version: 'Version',
+    sprint: 'Sprint',
   },
 };
 
@@ -121,6 +127,43 @@ function renderNextAction(na: NextAction, c: TC, t: I18nStrings): string {
         </button>
       </div>
     </div>`;
+}
+
+// ── Version tabs renderer ────────────────────────────────────────────
+
+function renderVersionTabs(versions: VersionFlowData[], activeId: string, c: TC): string {
+  if (versions.length <= 1 && versions[0]?.version.id === '__unversioned__') return '';
+  return `<div class="bf-version-tabs" style="display:flex;gap:2px;margin-bottom:16px;border-bottom:1px solid ${c.border};padding-bottom:0">
+    ${versions.map(v => {
+      const active = v.version.id === activeId;
+      const color = v.phases.every(p => p.status === 'done') ? c.green
+        : v.phases.some(p => p.status === 'active') ? c.yellow : c.muted;
+      return `<button class="bf-version-tab" data-version="${v.version.id}"
+        style="padding:6px 14px;font-family:${MONO};font-size:0.65rem;
+        background:transparent;border:none;border-bottom:2px solid ${active ? c.accent : 'transparent'};
+        color:${active ? c.text : c.muted};cursor:pointer">
+        <span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${color};margin-right:6px"></span>
+        ${v.version.label}
+      </button>`;
+    }).join('')}
+  </div>`;
+}
+
+// ── Sprint selector renderer ─────────────────────────────────────────
+
+function renderSprintSelector(sprints: SprintEntry[], activeSprint: number, c: TC): string {
+  if (sprints.length <= 1) return '';
+  return `<div class="bf-sprint-selector" style="display:flex;gap:4px;margin-bottom:8px">
+    ${sprints.map(s => {
+      const active = s.sprintNumber === activeSprint;
+      return `<button class="bf-sprint-pill" data-sprint="${s.sprintNumber}"
+        style="padding:3px 10px;font-family:${MONO};font-size:0.6rem;
+        background:${active ? c.dim : 'transparent'};border:1px solid ${active ? c.accent : c.border};
+        color:${active ? c.accent : c.muted};border-radius:12px;cursor:pointer">
+        S${s.sprintNumber}
+      </button>`;
+    }).join('')}
+  </div>`;
 }
 
 // ── Sprint renderer ───────────────────────────────────────────────────
@@ -226,12 +269,20 @@ export function mount(container: HTMLElement, api: PluginAPI): void {
   ensureAssets();
   let cachedPath = '';
   let methodologyData: MethodologyResponse | null = null;
+  let versionedData: VersionedResponse | null = null;
+  let activeVersionId = '';
+  let activeSprintNum = 0;
 
   const root = document.createElement('div');
   Object.assign(root.style, { height: '100%', overflowY: 'auto', boxSizing: 'border-box', padding: '24px', fontFamily: MONO });
   container.appendChild(root);
 
-  function render(ctx: PluginContext, data: FlowData | null): void {
+  function getActiveVersion(): VersionFlowData | null {
+    if (!versionedData) return null;
+    return versionedData.versions.find(v => v.version.id === activeVersionId) ?? versionedData.versions[0] ?? null;
+  }
+
+  function renderVersioned(ctx: PluginContext): void {
     const c = tc(ctx.theme === 'dark');
     const t = getI18n(ctx.locale);
     root.style.background = c.bg;
@@ -252,21 +303,19 @@ export function mount(container: HTMLElement, api: PluginAPI): void {
     const name = esc(ctx.project.name);
     const projPath = esc(ctx.project.path);
 
-    if (!data) {
-      root.innerHTML = `<div style="margin-bottom:24px"><div style="font-size:1.1rem;font-weight:700">${name}<span style="color:${c.accent}">▌</span></div><div style="font-size:0.65rem;color:${c.muted};margin-top:4px">${projPath}</div></div><div style="padding:20px">${[80, 60, 40].map((w, i) => `<div class="bf-skel" style="height:10px;width:${w}%;background:${c.muted};border-radius:2px;margin-bottom:10px;animation-delay:${i * 0.1}s"></div>`).join('')}</div>`;
+    if (!versionedData) {
+      root.innerHTML = `<div style="margin-bottom:24px"><div style="font-size:1.1rem;font-weight:700">${name}<span style="color:${c.accent}">&#x258C;</span></div><div style="font-size:0.65rem;color:${c.muted};margin-top:4px">${projPath}</div></div><div style="padding:20px">${[80, 60, 40].map((w, i) => `<div class="bf-skel" style="height:10px;width:${w}%;background:${c.muted};border-radius:2px;margin-bottom:10px;animation-delay:${i * 0.1}s"></div>`).join('')}</div>`;
       return;
     }
 
-    if (!data.bmadDetected) {
+    const ver = getActiveVersion();
+    if (!ver || !ver.bmadDetected) {
       root.innerHTML = renderEmpty(c, t);
       const initCopyBtn = root.querySelector('#bf-init-copy') as HTMLButtonElement | null;
       const initCmd = root.querySelector('#bf-init-cmd') as HTMLElement | null;
       const doCopy = () => {
         copyToClipboard(INIT_CMD).then(() => {
-          if (initCopyBtn) {
-            initCopyBtn.textContent = t.copied;
-            setTimeout(() => { initCopyBtn.textContent = t.copyCmd; }, 1500);
-          }
+          if (initCopyBtn) { initCopyBtn.textContent = t.copied; setTimeout(() => { initCopyBtn.textContent = t.copyCmd; }, 1500); }
         });
       };
       initCopyBtn?.addEventListener('click', doCopy);
@@ -274,36 +323,74 @@ export function mount(container: HTMLElement, api: PluginAPI): void {
       return;
     }
 
-    root.innerHTML = `<div class="bf-up" style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px"><div style="min-width:0;flex:1"><div style="font-size:1.1rem;font-weight:700;word-break:break-all">${name}<span style="color:${c.accent}">▌</span></div><div style="font-size:0.65rem;color:${c.muted};margin-top:4px;word-break:break-all">${projPath}</div></div><button id="bf-refresh" style="flex-shrink:0;margin-left:16px;padding:5px 12px;background:transparent;border:1px solid ${c.border};color:${c.muted};font-family:${MONO};font-size:0.65rem;border-radius:3px;cursor:pointer">${t.refresh}</button></div>${renderPhases(data.phases, c, t)}${data.nextAction ? renderNextAction(data.nextAction, c, t) : ''}${data.sprint ? renderSprint(data.sprint, c, t) : ''}${methodologyData ? renderMethodology(methodologyData, c, MONO) : ''}`;
+    const sprintToShow = ver.sprints.find(s => s.sprintNumber === activeSprintNum)?.data ?? ver.sprint;
+    const vTabsHtml = renderVersionTabs(versionedData.versions, activeVersionId, c);
+    const sSelectorHtml = ver.sprints.length > 1 ? renderSprintSelector(ver.sprints, activeSprintNum, c) : '';
+
+    root.innerHTML = [
+      `<div class="bf-up" style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px"><div style="min-width:0;flex:1"><div style="font-size:1.1rem;font-weight:700;word-break:break-all">${name}<span style="color:${c.accent}">&#x258C;</span></div><div style="font-size:0.65rem;color:${c.muted};margin-top:4px;word-break:break-all">${projPath}</div></div><button id="bf-refresh" style="flex-shrink:0;margin-left:16px;padding:5px 12px;background:transparent;border:1px solid ${c.border};color:${c.muted};font-family:${MONO};font-size:0.65rem;border-radius:3px;cursor:pointer">${t.refresh}</button></div>`,
+      vTabsHtml,
+      renderPhases(ver.phases, c, t),
+      ver.nextAction ? renderNextAction(ver.nextAction, c, t) : '',
+      sSelectorHtml,
+      sprintToShow ? renderSprint(sprintToShow, c, t) : '',
+      methodologyData ? renderMethodology(methodologyData, c, MONO) : '',
+    ].join('');
 
     root.querySelector('#bf-refresh')?.addEventListener('click', () => load(api.context));
+    root.querySelectorAll('.bf-version-tab').forEach(btn => {
+      btn.addEventListener('click', () => {
+        activeVersionId = (btn as HTMLElement).dataset.version || '';
+        const nv = getActiveVersion();
+        activeSprintNum = nv?.activeSprint ?? 0;
+        renderVersioned(ctx);
+      });
+    });
+    root.querySelectorAll('.bf-sprint-pill').forEach(btn => {
+      btn.addEventListener('click', () => {
+        activeSprintNum = parseInt((btn as HTMLElement).dataset.sprint || '0');
+        renderVersioned(ctx);
+      });
+    });
     bindMethodologyEvents(root);
-    if (methodologyData) {
-      bindMethodologyInteractions(root, c, copyToClipboard);
-    }
+    if (methodologyData) { bindMethodologyInteractions(root, c, copyToClipboard); }
     const copyBtn = root.querySelector('#bf-copy') as HTMLButtonElement | null;
-    if (copyBtn && data.nextAction) {
-      const cmd = data.nextAction.command;
+    if (copyBtn && ver.nextAction) {
+      const cmd = ver.nextAction.command;
       copyBtn.addEventListener('click', () => {
-        copyToClipboard(cmd).then(() => {
-          copyBtn.textContent = t.copied;
-          setTimeout(() => { copyBtn.textContent = t.copyCmd; }, 1500);
-        });
+        copyToClipboard(cmd).then(() => { copyBtn.textContent = t.copied; setTimeout(() => { copyBtn.textContent = t.copyCmd; }, 1500); });
       });
     }
   }
 
   async function load(ctx: PluginContext): Promise<void> {
-    if (!ctx.project) { render(ctx, null); return; }
-    render(ctx, null);
+    if (!ctx.project) { versionedData = null; renderVersioned(ctx); return; }
+    versionedData = null;
+    renderVersioned(ctx);
     try {
-      const [data, methData] = await Promise.all([
-        api.rpc('GET', `flow?path=${encodeURIComponent(ctx.project.path)}`) as Promise<FlowData>,
-        api.rpc('GET', `methodology?path=${encodeURIComponent(ctx.project.path)}`).then(d => d as MethodologyResponse).catch(() => null),
+      const enc = encodeURIComponent(ctx.project.path);
+      const [verData, methData] = await Promise.all([
+        api.rpc('GET', `versions?path=${enc}`).then(d => d as VersionedResponse).catch(() => null),
+        api.rpc('GET', `methodology?path=${enc}`).then(d => d as MethodologyResponse).catch(() => null),
       ]);
+      if (verData) {
+        versionedData = verData;
+        activeVersionId = verData.activeVersionId;
+        const av = getActiveVersion();
+        activeSprintNum = av?.activeSprint ?? 0;
+        methodologyData = av?.bmadDetected ? methData : null;
+      } else {
+        const flowData = await api.rpc('GET', `flow?path=${enc}`) as FlowData;
+        versionedData = {
+          versions: [{ ...flowData, version: { id: '__unversioned__', label: '', planningDir: '', implementationDir: '' }, sprints: [], activeSprint: 0 }],
+          activeVersionId: '__unversioned__', unversioned: true,
+        };
+        activeVersionId = '__unversioned__';
+        activeSprintNum = 0;
+        methodologyData = flowData.bmadDetected ? methData : null;
+      }
       cachedPath = ctx.project.path;
-      methodologyData = data.bmadDetected ? methData : null;
-      render(ctx, data);
+      renderVersioned(ctx);
     } catch (err) {
       const c = tc(ctx.theme === 'dark');
       const d = document.createElement('div');
@@ -317,7 +404,7 @@ export function mount(container: HTMLElement, api: PluginAPI): void {
   load(api.context);
   const unsub = api.onContextChange(ctx => {
     if (ctx.project?.path !== cachedPath) load(ctx);
-    else load(ctx);
+    else renderVersioned(ctx);
   });
   (container as any)._bfUnsub = unsub;
 }

@@ -5,6 +5,7 @@ import type {
   PhaseStatus, PhaseInfo, NextAction,
   StoryStatus, EpicEntry, SprintData, FlowData,
   MethodologyResponse,
+  VersionInfo, VersionFlowData, VersionedResponse, SprintEntry,
 } from './types.js';
 import { parseMethodologyCsv } from './methodologyParser.js';
 import { buildMethodologySections } from './methodologyViewModel.js';
@@ -179,6 +180,41 @@ function computeNextAction(a: ArtifactMap, sprint: SprintData | null): NextActio
 
 const STORY_STATUSES = new Set<StoryStatus>(['backlog', 'ready-for-dev', 'in-progress', 'review', 'done']);
 
+function parseSprintYaml(raw: Record<string, string>): SprintData | null {
+  const project = raw['project'] || '';
+  const epics: EpicEntry[] = [];
+  let currentEpic: EpicEntry | null = null;
+
+  const devKeys = Object.keys(raw)
+    .filter(k => k.startsWith('development_status.'))
+    .map(k => [k.replace('development_status.', ''), raw[k]] as [string, string]);
+
+  for (const [key, val] of devKeys) {
+    if (key.startsWith('epic-') && !key.includes('-retrospective')) {
+      if (/^\d+$/.test(key.replace('epic-', ''))) {
+        currentEpic = { key, status: val, stories: [] };
+        epics.push(currentEpic);
+        continue;
+      }
+    }
+    if (key.endsWith('-retrospective') && currentEpic) {
+      currentEpic.retroStatus = val;
+      continue;
+    }
+    if (currentEpic && STORY_STATUSES.has(val as StoryStatus)) {
+      currentEpic.stories.push({ key, status: val as StoryStatus });
+    }
+  }
+
+  let totalStories = 0, doneStories = 0;
+  for (const e of epics) {
+    totalStories += e.stories.length;
+    doneStories += e.stories.filter(s => s.status === 'done').length;
+  }
+
+  return { project, epics, totalStories, doneStories };
+}
+
 function parseSprintStatus(implDir: string): SprintData | null {
   const files = fs.existsSync(implDir) ? fs.readdirSync(implDir) : [];
   const yamlFile = files.find(f => /sprint.?status\.ya?ml/i.test(f));
@@ -186,41 +222,96 @@ function parseSprintStatus(implDir: string): SprintData | null {
 
   try {
     const raw = parseSimpleYaml(fs.readFileSync(path.join(implDir, yamlFile), 'utf-8'));
-    const project = raw['project'] || '';
-    const epics: EpicEntry[] = [];
-    let currentEpic: EpicEntry | null = null;
-
-    const devKeys = Object.keys(raw)
-      .filter(k => k.startsWith('development_status.'))
-      .map(k => [k.replace('development_status.', ''), raw[k]] as [string, string]);
-
-    for (const [key, val] of devKeys) {
-      if (key.startsWith('epic-') && !key.includes('-retrospective')) {
-        if (/^\d+$/.test(key.replace('epic-', ''))) {
-          currentEpic = { key, status: val, stories: [] };
-          epics.push(currentEpic);
-          continue;
-        }
-      }
-      if (key.endsWith('-retrospective') && currentEpic) {
-        currentEpic.retroStatus = val;
-        continue;
-      }
-      if (currentEpic && STORY_STATUSES.has(val as StoryStatus)) {
-        currentEpic.stories.push({ key, status: val as StoryStatus });
-      }
-    }
-
-    let totalStories = 0, doneStories = 0;
-    for (const e of epics) {
-      totalStories += e.stories.length;
-      doneStories += e.stories.filter(s => s.status === 'done').length;
-    }
-
-    return { project, epics, totalStories, doneStories };
+    return parseSprintYaml(raw);
   } catch {
     return null;
   }
+}
+
+// ── Version discovery ────────────────────────────────────────────────
+
+function discoverVersions(planBase: string, implBase: string): VersionInfo[] {
+  const docsDir = path.dirname(planBase);
+  const planLeaf = path.basename(planBase);
+  const implLeaf = path.basename(implBase);
+
+  if (!fs.existsSync(docsDir)) {
+    return [{ id: '__unversioned__', label: '', planningDir: planBase, implementationDir: implBase }];
+  }
+
+  let vDirs: string[];
+  try {
+    vDirs = fs.readdirSync(docsDir)
+      .filter(d => /^v\d+$/.test(d))
+      .filter(d => {
+        const full = path.join(docsDir, d);
+        try { return fs.statSync(full).isDirectory(); } catch { return false; }
+      })
+      .filter(d => {
+        const vPath = path.join(docsDir, d);
+        return fs.existsSync(path.join(vPath, planLeaf)) || fs.existsSync(path.join(vPath, implLeaf));
+      })
+      .sort((a, b) => parseInt(a.slice(1)) - parseInt(b.slice(1)));
+  } catch {
+    vDirs = [];
+  }
+
+  if (vDirs.length === 0) {
+    return [{ id: '__unversioned__', label: '', planningDir: planBase, implementationDir: implBase }];
+  }
+
+  return vDirs.map(v => ({
+    id: v,
+    label: v.toUpperCase(),
+    planningDir: path.join(docsDir, v, planLeaf),
+    implementationDir: path.join(docsDir, v, implLeaf),
+  }));
+}
+
+// ── Multi-sprint parser ──────────────────────────────────────────────
+
+function parseMultiSprint(implDir: string): SprintEntry[] {
+  if (!fs.existsSync(implDir)) return [];
+
+  let files: string[];
+  try { files = fs.readdirSync(implDir); } catch { return []; }
+
+  const sprintPattern = /^sprint-?status(?:-(\d+))?\.ya?ml$/i;
+  const matches: { num: number; file: string }[] = [];
+
+  for (const f of files) {
+    const m = sprintPattern.exec(f);
+    if (m) {
+      matches.push({ num: m[1] ? parseInt(m[1]) : 1, file: f });
+    }
+  }
+
+  if (matches.length === 0) return [];
+  matches.sort((a, b) => a.num - b.num);
+
+  const entries: SprintEntry[] = [];
+  for (const { num, file } of matches) {
+    try {
+      const raw = parseSimpleYaml(fs.readFileSync(path.join(implDir, file), 'utf-8'));
+      const data = parseSprintYaml(raw);
+      if (data) {
+        entries.push({ sprintNumber: num, fileName: file, data, active: false });
+      }
+    } catch { /* skip corrupt files */ }
+  }
+
+  for (let i = entries.length - 1; i >= 0; i--) {
+    const allDone = entries[i].data.epics.every(e => e.status === 'done');
+    if (!allDone) {
+      entries[i].active = true;
+      break;
+    }
+  }
+  if (entries.length > 0 && !entries.some(e => e.active)) {
+    entries[entries.length - 1].active = true;
+  }
+
+  return entries;
 }
 
 // ── Path safety ───────────────────────────────────────────────────────
@@ -338,10 +429,81 @@ function getFlowData(projectPath: string): FlowData {
   };
 }
 
+// ── Versioned handler ────────────────────────────────────────────────
+
+function getVersionedData(projectPath: string): VersionedResponse {
+  const p = safePath(projectPath);
+  const bmadDir = path.join(p, '_bmad');
+  const bmadDetected = fs.existsSync(bmadDir);
+
+  if (!bmadDetected) {
+    const emptyFlow: FlowData = {
+      phases: computePhases({ productBrief: false, prd: false, architecture: false, uxDesign: false, epics: false, sprintStatus: false }, null),
+      nextAction: null, sprint: null, bmadDetected: false, configSource: '',
+    };
+    return {
+      versions: [{
+        ...emptyFlow,
+        version: { id: '__unversioned__', label: '', planningDir: '', implementationDir: '' },
+        sprints: [], activeSprint: 0,
+      }],
+      activeVersionId: '__unversioned__',
+      unversioned: true,
+    };
+  }
+
+  const paths = resolveBmadPaths(p);
+  const planBase = paths?.planningArtifacts || path.join(p, 'docs', 'planning-artifacts');
+  const implBase = paths?.implementationArtifacts || path.join(p, 'docs', 'implementation-artifacts');
+  const versions = discoverVersions(planBase, implBase);
+  const unversioned = versions.length === 1 && versions[0].id === '__unversioned__';
+
+  const versionFlows: VersionFlowData[] = versions.map(v => {
+    const artifacts = detectArtifacts(v.planningDir, v.implementationDir);
+    const sprints = parseMultiSprint(v.implementationDir);
+    const activeSprint = sprints.find(s => s.active);
+    const sprint = activeSprint?.data ?? (artifacts.sprintStatus ? parseSprintStatus(v.implementationDir) : null);
+
+    return {
+      phases: computePhases(artifacts, sprint),
+      nextAction: computeNextAction(artifacts, sprint),
+      sprint,
+      bmadDetected: true,
+      configSource: paths?.source || 'defaults',
+      version: v,
+      sprints,
+      activeSprint: activeSprint?.sprintNumber ?? 0,
+    };
+  });
+
+  let activeVersionId = versions[versions.length - 1].id;
+  for (let i = versionFlows.length - 1; i >= 0; i--) {
+    if (versionFlows[i].phases.some(ph => ph.status === 'active')) {
+      activeVersionId = versionFlows[i].version.id;
+      break;
+    }
+  }
+
+  return { versions: versionFlows, activeVersionId, unversioned };
+}
+
 // ── HTTP server ───────────────────────────────────────────────────────
 
 const server = http.createServer((req, res) => {
   res.setHeader('Content-Type', 'application/json');
+
+  if (req.method === 'GET' && req.url?.startsWith('/versions')) {
+    try {
+      const { searchParams } = new URL(req.url, 'http://localhost');
+      const data = getVersionedData(searchParams.get('path') ?? '');
+      res.end(JSON.stringify(data));
+    } catch (err) {
+      const code = (err as Error).message.includes('does not exist') ? 404 : 400;
+      res.writeHead(code);
+      res.end(JSON.stringify({ error: (err as Error).message }));
+    }
+    return;
+  }
 
   if (req.method === 'GET' && req.url?.startsWith('/methodology')) {
     try {

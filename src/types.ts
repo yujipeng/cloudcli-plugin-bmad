@@ -67,6 +67,34 @@ export interface FlowData {
   configSource: string;
 }
 
+// ── Version types ────────────────────────────────────────────────────
+
+export interface SprintEntry {
+  sprintNumber: number;
+  fileName: string;
+  data: SprintData;
+  active: boolean;
+}
+
+export interface VersionInfo {
+  id: string;
+  label: string;
+  planningDir: string;
+  implementationDir: string;
+}
+
+export interface VersionFlowData extends FlowData {
+  version: VersionInfo;
+  sprints: SprintEntry[];
+  activeSprint: number;
+}
+
+export interface VersionedResponse {
+  versions: VersionFlowData[];
+  activeVersionId: string;
+  unversioned: boolean;
+}
+
 // ── Methodology types ────────────────────────────────────────────────
 
 export type MethodologyCategory = 'workflow' | 'agent' | 'tool';
