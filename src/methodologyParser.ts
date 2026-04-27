@@ -54,7 +54,12 @@ export function parseMethodologyCsv(csvContent: string): MethodologyItem[] {
     if (!phase) continue;
 
     const workflowFile = col(fields, 5);
-    const agentName = col(fields, 8);
+    const rawAgentName = col(fields, 8);
+    const module = col(fields, 0);
+
+    const isAgentPhase = phase.startsWith('bmad-agent-');
+    const agentName = isAgentPhase ? phase : rawAgentName;
+    const normalizedPhase = isAgentPhase ? 'agent' : phase;
 
     items.push({
       skill: workflowFile || agentName,
@@ -63,7 +68,9 @@ export function parseMethodologyCsv(csvContent: string): MethodologyItem[] {
       description: col(fields, 13) || '',
       required: col(fields, 7).toLowerCase() === 'true',
       category: inferCategory(agentName, workflowFile),
-      phase,
+      phase: normalizedPhase,
+      module,
+      agentName,
     });
   }
 

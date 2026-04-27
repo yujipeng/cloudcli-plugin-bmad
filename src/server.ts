@@ -2,12 +2,12 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import type {
-  Phase, PhaseStatus, PhaseInfo, NextAction,
-  StoryStatus, StoryEntry, EpicEntry, SprintData, FlowData,
+  PhaseStatus, PhaseInfo, NextAction,
+  StoryStatus, EpicEntry, SprintData, FlowData,
   MethodologyResponse,
 } from './types.js';
 import { parseMethodologyCsv } from './methodologyParser.js';
-import { groupByPhase } from './methodologyViewModel.js';
+import { buildMethodologySections } from './methodologyViewModel.js';
 
 // ── Minimal YAML parser (flat key:value + nested map + comments) ──────
 
@@ -245,18 +245,18 @@ function getMethodologyData(projectPath: string): MethodologyResponse {
   const csvPath = path.join(p, '_bmad', '_config', 'bmad-help.csv');
 
   if (!fs.existsSync(path.join(p, '_bmad'))) {
-    return { groups: [], warning: 'no bmad directory' };
+    return { sections: [], warning: 'no bmad directory' };
   }
 
   if (!fs.existsSync(csvPath)) {
-    return { groups: [], warning: 'methodology file not found' };
+    return { sections: [], warning: 'methodology file not found' };
   }
 
   let stat: fs.Stats;
   try {
     stat = fs.statSync(csvPath);
   } catch {
-    return { groups: [], error: 'permission denied' };
+    return { sections: [], error: 'permission denied' };
   }
 
   const mtime = stat.mtimeMs;
@@ -269,12 +269,12 @@ function getMethodologyData(projectPath: string): MethodologyResponse {
   try {
     csvContent = fs.readFileSync(csvPath, 'utf-8');
   } catch {
-    return { groups: [], error: 'permission denied' };
+    return { sections: [], error: 'permission denied' };
   }
 
   const items = parseMethodologyCsv(csvContent);
-  const groups = groupByPhase(items);
-  const data: MethodologyResponse = { groups };
+  const sections = buildMethodologySections(items);
+  const data: MethodologyResponse = { sections };
 
   methodologyCache.set(csvPath, { mtime, data });
   return data;

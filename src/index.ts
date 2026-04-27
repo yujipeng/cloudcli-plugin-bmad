@@ -167,7 +167,7 @@ function renderEpic(epic: EpicEntry, c: TC, t: I18nStrings): string {
 
 const INIT_CMD = `npx bmad-method install \\
   --directory . \\
-  --modules bmm \\
+  --modules bmm,cis,tea,bmb \\
   --tools claude-code,cursor,codex,gemini \\
   --user-name "Engineer" \\
   --communication-language Chinese \\

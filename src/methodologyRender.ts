@@ -1,4 +1,4 @@
-import type { MethodologyResponse } from './types.js';
+import type { MethodologyResponse, MethodologySection } from './types.js';
 
 interface TC { bg: string; surface: string; border: string; text: string; muted: string; accent: string; dim: string; green: string; yellow: string; red: string; }
 
@@ -7,7 +7,6 @@ const PHASE_ICONS: Record<string, string> = {
   '2-planning': '📋',
   '3-solutioning': '🏗️',
   '4-implementation': '💻',
-  'anytime': '🔧',
 };
 
 export function renderMethodologySkeleton(c: TC, mono: string): string {
@@ -18,43 +17,56 @@ export function renderMethodologySkeleton(c: TC, mono: string): string {
 }
 
 export function renderMethodology(data: MethodologyResponse, c: TC, mono: string, container?: HTMLElement): string {
-  if (!data.groups || data.groups.length === 0) return '';
+  if (!data.sections || data.sections.length === 0) return '';
 
   const compact = typeof window !== 'undefined' && (container?.offsetWidth ?? 500) < 400;
   const itemPad = compact ? 'padding:3px 0;font-size:0.58rem;' : 'padding:4px 0;font-size:0.62rem;';
 
-  const sections = data.groups.map(group => {
-    const icon = PHASE_ICONS[group.phase] ?? '📂';
-    const name = group.displayName || group.phase;
-    const count = group.items.length;
-    const isAnytime = group.phase === 'anytime';
-
-    const itemsHtml = group.items.length > 0
-      ? group.items.map(item => {
-        const reqBar = item.required ? `border-left:2px solid ${c.accent};padding-left:8px;` : 'padding-left:10px;';
-        const catStyle = item.category === 'agent' ? `color:${c.accent};` : `color:${c.text};opacity:0.85;`;
-        return `<div class="bf-method-item" data-skill="${esc(item.skill)}" data-required="${item.required}" style="${reqBar}${catStyle}${itemPad}cursor:pointer;transition:background 0.15s" data-desc="${esc(item.description)}">
-          <span style="color:${c.muted};margin-right:6px">[${esc(item.menuCode)}]</span>${esc(item.displayName)}
-        </div>`;
-      }).join('')
-      : `<div style="font-size:0.6rem;color:${c.muted};padding:6px 10px;font-style:italic">暂无可用操作</div>`;
-
-    const collapsed = isAnytime ? '' : 'bf-collapsed';
-    const chevron = isAnytime ? '' : `<span class="bf-chevron" style="font-size:0.5rem;margin-right:6px;transition:transform 0.2s;display:inline-block">▶</span>`;
-
-    return `<div class="bf-method-group" style="margin-bottom:8px">
-      <div class="bf-method-header ${isAnytime ? '' : 'bf-collapsible'}" role="button" tabindex="0" aria-expanded="${isAnytime ? 'true' : 'false'}" style="display:flex;align-items:center;padding:6px 0;cursor:${isAnytime ? 'default' : 'pointer'};font-size:0.65rem;font-weight:600;color:${c.text}">
-        ${chevron}<span style="margin-right:6px">${icon}</span>${esc(name)}<span style="color:${c.muted};font-weight:400;margin-left:6px">(${count})</span>
-      </div>
-      <div class="bf-method-items ${collapsed}" style="${collapsed ? 'display:none;' : ''}padding-left:4px">
-        ${itemsHtml}
-      </div>
-    </div>`;
-  }).join('');
+  const sectionsHtml = data.sections.map(section => renderSection(section, c, itemPad)).join('');
 
   return `<div class="bf-up bf-methodology" style="background:${c.surface};border:1px solid ${c.border};border-radius:4px;padding:16px;margin-top:16px;font-family:${mono}">
     <div style="font-size:0.6rem;color:${c.muted};letter-spacing:0.1em;text-transform:uppercase;margin-bottom:10px">方法论导航</div>
-    ${sections}
+    ${sectionsHtml}
+  </div>`;
+}
+
+function renderSection(section: MethodologySection, c: TC, itemPad: string): string {
+  const sectionLabel = `<div style="font-size:0.55rem;color:${c.muted};letter-spacing:0.08em;text-transform:uppercase;margin:12px 0 6px;display:flex;align-items:center;gap:6px">
+    <span>${section.icon}</span>${esc(section.displayName)}
+  </div>`;
+
+  let content = '';
+  if (section.kind === 'phase-workflows' && section.groups) {
+    content = section.groups.map(g => renderCollapsibleGroup(g.displayName, PHASE_ICONS[g.phase] ?? '📂', g.items, c, itemPad, false)).join('');
+  } else if (section.kind === 'agents' && section.agents) {
+    content = section.agents.map(ag => renderCollapsibleGroup(ag.displayName, '🤖', ag.items, c, itemPad, true)).join('');
+  } else if (section.kind === 'general' && section.groups) {
+    content = section.groups.map(g => renderCollapsibleGroup(g.displayName, g.phase === 'core' ? '🧩' : '🔧', g.items, c, itemPad, false)).join('');
+  }
+
+  return `<div class="bf-method-section" style="margin-bottom:4px">${sectionLabel}${content}</div>`;
+}
+
+function renderCollapsibleGroup(name: string, icon: string, items: import('./types.js').MethodologyItem[], c: TC, itemPad: string, expanded: boolean): string {
+  const count = items.length;
+  const collapsed = expanded ? '' : 'bf-collapsed';
+  const chevron = `<span class="bf-chevron" style="font-size:0.5rem;margin-right:6px;transition:transform 0.2s;display:inline-block${expanded ? ';transform:rotate(90deg)' : ''}">▶</span>`;
+
+  const itemsHtml = items.map(item => {
+    const reqBar = item.required ? `border-left:2px solid ${c.accent};padding-left:8px;` : 'padding-left:10px;';
+    const catStyle = item.category === 'agent' ? `color:${c.accent};` : `color:${c.text};opacity:0.85;`;
+    return `<div class="bf-method-item" data-skill="${esc(item.skill)}" data-required="${item.required}" style="${reqBar}${catStyle}${itemPad}cursor:pointer;transition:background 0.15s" data-desc="${esc(item.description)}">
+      <span style="color:${c.muted};margin-right:6px">[${esc(item.menuCode)}]</span>${esc(item.displayName)}
+    </div>`;
+  }).join('');
+
+  return `<div class="bf-method-group" style="margin-bottom:6px">
+    <div class="bf-method-header bf-collapsible" role="button" tabindex="0" aria-expanded="${expanded ? 'true' : 'false'}" style="display:flex;align-items:center;padding:4px 0;cursor:pointer;font-size:0.62rem;font-weight:600;color:${c.text}">
+      ${chevron}<span style="margin-right:6px">${icon}</span>${esc(name)}<span style="color:${c.muted};font-weight:400;margin-left:6px">(${count})</span>
+    </div>
+    <div class="bf-method-items ${collapsed}" style="${collapsed ? 'display:none;' : ''}padding-left:4px">
+      ${itemsHtml}
+    </div>
   </div>`;
 }
 

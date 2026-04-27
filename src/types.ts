@@ -79,6 +79,8 @@ export interface MethodologyItem {
   required: boolean;
   category: MethodologyCategory;
   phase: string;
+  module: string;
+  agentName: string;
 }
 
 export interface MethodologyGroup {
@@ -87,8 +89,25 @@ export interface MethodologyGroup {
   items: MethodologyItem[];
 }
 
+export type MethodologySectionKind = 'phase-workflows' | 'agents' | 'general';
+
+export interface AgentGroup {
+  agentName: string;
+  displayName: string;
+  items: MethodologyItem[];
+}
+
+export interface MethodologySection {
+  kind: MethodologySectionKind;
+  displayName: string;
+  icon: string;
+  groups?: MethodologyGroup[];
+  agents?: AgentGroup[];
+  items?: MethodologyItem[];
+}
+
 export interface MethodologyResponse {
-  groups: MethodologyGroup[];
+  sections: MethodologySection[];
   warning?: string;
   error?: string;
   partialFailure?: boolean;

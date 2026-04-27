@@ -20,6 +20,8 @@ describe('parseMethodologyCsv', () => {
       required: false,
       category: 'workflow',
       phase: '1-analysis',
+      module: 'BMad Method',
+      agentName: '',
     });
   });
 
@@ -61,6 +63,28 @@ describe('parseMethodologyCsv', () => {
 
     const items = parseMethodologyCsv(csv);
     expect(items[0].category).toBe('agent');
+  });
+
+  it('detects agent-name-as-phase pattern and normalizes phase', () => {
+    const csv = [
+      HEADER,
+      'BMad Method,bmad-agent-tech-writer,Write Document,WD,"Describe in detail",write,,anytime,,,,,,false,project-knowledge,document',
+    ].join('\n');
+
+    const items = parseMethodologyCsv(csv);
+    expect(items[0].phase).toBe('agent');
+    expect(items[0].agentName).toBe('bmad-agent-tech-writer');
+    expect(items[0].skill).toBe('write');
+  });
+
+  it('parses module field correctly', () => {
+    const csv = [
+      HEADER,
+      'Core,anytime,BMad Help,BH,,bmad-help,,false,,,,,false,,,',
+    ].join('\n');
+
+    const items = parseMethodologyCsv(csv);
+    expect(items[0].module).toBe('Core');
   });
 
   it('parses required=true correctly', () => {

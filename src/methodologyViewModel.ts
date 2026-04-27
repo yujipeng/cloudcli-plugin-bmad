@@ -1,11 +1,10 @@
-import type { MethodologyItem, MethodologyGroup } from './types.js';
+import type { MethodologyItem, MethodologyGroup, MethodologySection, AgentGroup } from './types.js';
 
 const PHASE_ORDER = [
   '1-analysis',
   '2-planning',
   '3-solutioning',
   '4-implementation',
-  'anytime',
 ];
 
 const PHASE_DISPLAY_NAMES: Record<string, string> = {
@@ -13,8 +12,77 @@ const PHASE_DISPLAY_NAMES: Record<string, string> = {
   '2-planning': '规划',
   '3-solutioning': '方案设计',
   '4-implementation': '实现',
-  'anytime': '通用工具',
 };
+
+const PHASE_SET = new Set(PHASE_ORDER);
+
+function toAgentDisplayName(agentName: string): string {
+  return agentName
+    .replace(/^bmad-agent-/, '')
+    .split('-')
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ');
+}
+
+export function buildMethodologySections(items: MethodologyItem[]): MethodologySection[] {
+  const phaseItems: MethodologyItem[] = [];
+  const agentItems: MethodologyItem[] = [];
+  const generalItems: MethodologyItem[] = [];
+
+  for (const item of items) {
+    if (item.agentName && item.phase === 'agent') {
+      agentItems.push(item);
+    } else if (PHASE_SET.has(item.phase)) {
+      phaseItems.push(item);
+    } else {
+      generalItems.push(item);
+    }
+  }
+
+  const sections: MethodologySection[] = [];
+
+  if (phaseItems.length > 0) {
+    const grouped = new Map<string, MethodologyItem[]>();
+    for (const item of phaseItems) {
+      const list = grouped.get(item.phase);
+      if (list) list.push(item);
+      else grouped.set(item.phase, [item]);
+    }
+    const groups: MethodologyGroup[] = PHASE_ORDER
+      .filter(p => grouped.has(p))
+      .map(p => ({ phase: p, displayName: PHASE_DISPLAY_NAMES[p] ?? p, items: grouped.get(p)! }));
+
+    sections.push({ kind: 'phase-workflows', displayName: '阶段工作流', icon: '🔄', groups });
+  }
+
+  if (agentItems.length > 0) {
+    const grouped = new Map<string, MethodologyItem[]>();
+    for (const item of agentItems) {
+      const list = grouped.get(item.agentName);
+      if (list) list.push(item);
+      else grouped.set(item.agentName, [item]);
+    }
+    const agents: AgentGroup[] = [...grouped.entries()].map(([name, items]) => ({
+      agentName: name,
+      displayName: toAgentDisplayName(name),
+      items,
+    }));
+
+    sections.push({ kind: 'agents', displayName: 'Agent', icon: '🤖', agents });
+  }
+
+  if (generalItems.length > 0) {
+    const bmadItems = generalItems.filter(i => i.module === 'BMad Method');
+    const coreItems = generalItems.filter(i => i.module !== 'BMad Method');
+    const groups: MethodologyGroup[] = [];
+    if (bmadItems.length > 0) groups.push({ phase: 'bmad-method', displayName: 'BMad Method', items: bmadItems });
+    if (coreItems.length > 0) groups.push({ phase: 'core', displayName: 'Core', items: coreItems });
+
+    sections.push({ kind: 'general', displayName: '通用能力', icon: '🧰', groups });
+  }
+
+  return sections;
+}
 
 export function groupByPhase(items: MethodologyItem[]): MethodologyGroup[] {
   const grouped = new Map<string, MethodologyItem[]>();
@@ -28,8 +96,9 @@ export function groupByPhase(items: MethodologyItem[]): MethodologyGroup[] {
     }
   }
 
+  const allPhases = [...PHASE_ORDER, 'anytime'];
   const orderedPhases: string[] = [];
-  for (const p of PHASE_ORDER) {
+  for (const p of allPhases) {
     if (grouped.has(p)) orderedPhases.push(p);
   }
   for (const p of grouped.keys()) {
