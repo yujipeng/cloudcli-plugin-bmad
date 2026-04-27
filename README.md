@@ -24,8 +24,8 @@ https://github.com/yujipeng/cloudcli-plugin-bmad.git
 或手动安装：
 
 ```bash
-git clone https://github.com/yujipeng/cloudcli-plugin-bmad.git ~/.claude-code-ui/plugins/bmad-flow
-cd ~/.claude-code-ui/plugins/bmad-flow
+git clone https://github.com/yujipeng/cloudcli-plugin-bmad.git ~/.claude-code-ui/plugins/cloudcli-plugin-bmad
+cd ~/.claude-code-ui/plugins/cloudcli-plugin-bmad
 npm install
 npm run build
 ```
