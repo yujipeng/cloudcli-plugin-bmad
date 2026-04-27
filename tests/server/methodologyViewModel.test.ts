@@ -53,17 +53,18 @@ describe('buildMethodologySections', () => {
     expect(phaseSection.groups!.map(g => g.phase)).toEqual(['1-discovery', '2-planning', '4-implementation']);
   });
 
-  it('groups agent items by agentName', () => {
+  it('lists all agent items flat under agents section', () => {
     const items: MethodologyItem[] = [
-      item('agent', 'write', { agentName: 'bmad-agent-tech-writer', category: 'agent' }),
-      item('agent', 'mermaid', { agentName: 'bmad-agent-tech-writer', category: 'agent' }),
+      item('agent', 'analyst', { agentName: 'bmad-agent-analyst', category: 'agent' }),
+      item('agent', 'dev', { agentName: 'bmad-agent-dev', category: 'agent' }),
     ];
 
     const sections = buildMethodologySections(items);
     const agentSection = sections.find(s => s.kind === 'agents')!;
-    expect(agentSection.agents).toHaveLength(1);
-    expect(agentSection.agents![0].displayName).toBe('Tech Writer');
-    expect(agentSection.agents![0].items).toHaveLength(2);
+    expect(agentSection.items).toHaveLength(2);
+    expect(agentSection.items!.map(i => i.agentName)).toEqual([
+      'bmad-agent-analyst', 'bmad-agent-dev',
+    ]);
   });
 
   it('sub-groups general items by module', () => {

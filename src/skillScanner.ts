@@ -37,6 +37,8 @@ const SKILL_PHASE_MAP: Record<string, string> = {
   'bmad-agent-architect': 'agent',
   'bmad-agent-dev': 'agent',
   'bmad-agent-tech-writer': 'agent',
+
+  'bmad-brainstorming': '1-discovery',
 };
 
 function parseFrontmatter(content: string): { name: string; description: string } | null {

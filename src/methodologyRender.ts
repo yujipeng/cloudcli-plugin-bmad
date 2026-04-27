@@ -33,42 +33,37 @@ export function renderMethodology(data: MethodologyResponse, c: TC, mono: string
 }
 
 function renderSection(section: MethodologySection, c: TC, itemPad: string): string {
-  const sectionLabel = `<div style="font-size:0.55rem;color:${c.muted};letter-spacing:0.08em;text-transform:uppercase;margin:12px 0 6px;display:flex;align-items:center;gap:6px">
-    <span>${section.icon}</span>${esc(section.displayName)}
-  </div>`;
-
   let content = '';
   if (section.kind === 'phase-workflows' && section.groups) {
-    content = section.groups.map(g => renderCollapsibleGroup(g.displayName, PHASE_ICONS[g.phase] ?? '📂', g.items, c, itemPad, false)).join('');
-  } else if (section.kind === 'agents' && section.agents) {
-    content = section.agents.map(ag => renderCollapsibleGroup(ag.displayName, '🤖', ag.items, c, itemPad, true)).join('');
+    content = section.groups.map(g => renderCollapsibleGroup(g.displayName, PHASE_ICONS[g.phase] ?? '📂', g.items, c, itemPad)).join('');
+  } else if (section.kind === 'agents' && section.items) {
+    content = renderCollapsibleGroup(section.displayName, '🤖', section.items, c, itemPad);
   } else if (section.kind === 'general' && section.groups) {
-    content = section.groups.map(g => renderCollapsibleGroup(g.displayName, g.phase === 'core' ? '🧩' : '🔧', g.items, c, itemPad, false)).join('');
+    content = section.groups.map(g => renderCollapsibleGroup(g.displayName, g.phase === 'core' ? '🧩' : '🔧', g.items, c, itemPad)).join('');
   }
 
-  return `<div class="bf-method-section" style="margin-bottom:4px">${sectionLabel}${content}</div>`;
+  return `<div class="bf-method-section" style="margin-bottom:4px">${content}</div>`;
 }
 
-function renderCollapsibleGroup(name: string, icon: string, items: import('./types.js').MethodologyItem[], c: TC, _itemPad: string, expanded: boolean): string {
+function renderCollapsibleGroup(name: string, icon: string, items: import('./types.js').MethodologyItem[], c: TC, _itemPad: string): string {
   const count = items.length;
-  const collapsed = expanded ? '' : 'bf-collapsed';
-  const chevron = `<span class="bf-chevron" style="font-size:0.5rem;margin-right:6px;transition:transform 0.2s;display:inline-block${expanded ? ';transform:rotate(90deg)' : ''}">▶</span>`;
+  const chevron = `<span class="bf-chevron" style="font-size:0.5rem;margin-right:6px;transition:transform 0.2s;display:inline-block">▶</span>`;
 
   const itemsHtml = items.map(item => {
     const reqBar = item.required ? `border-left:2px solid ${c.accent};` : '';
     const desc = item.description.length > 80 ? item.description.slice(0, 80) + '...' : item.description;
     const codeTag = item.menuCode ? `<span style="color:${c.muted};font-size:0.5rem;margin-left:6px">[${esc(item.menuCode)}]</span>` : '';
-    return `<div class="bf-method-card" data-skill="${esc(item.skill)}" style="padding:6px 8px;margin:3px 0;border:1px solid ${c.border};border-radius:3px;cursor:pointer;${reqBar}transition:background 0.15s">
+    return `<div class="bf-method-card" data-skill="${esc(item.skill)}" style="padding:6px 8px;margin:3px 0;border:1px solid ${c.border};border-radius:3px;cursor:pointer;${reqBar}transition:background 0.15s" title="点击复制: ${esc(item.skill)}">
       <div style="font-size:0.62rem;font-weight:600;color:${c.text}">${esc(item.displayName)}${codeTag}</div>
       ${desc ? `<div style="font-size:0.52rem;color:${c.muted};margin-top:2px;line-height:1.3">${esc(desc)}</div>` : ''}
     </div>`;
   }).join('');
 
   return `<div class="bf-method-group" style="margin-bottom:6px">
-    <div class="bf-method-header bf-collapsible" role="button" tabindex="0" aria-expanded="${expanded ? 'true' : 'false'}" style="display:flex;align-items:center;padding:4px 0;cursor:pointer;font-size:0.62rem;font-weight:600;color:${c.text}">
+    <div class="bf-method-header bf-collapsible" role="button" tabindex="0" aria-expanded="false" style="display:flex;align-items:center;padding:4px 0;cursor:pointer;font-size:0.62rem;font-weight:600;color:${c.text}">
       ${chevron}<span style="margin-right:6px">${icon}</span>${esc(name)}<span style="color:${c.muted};font-weight:400;margin-left:6px">(${count})</span>
     </div>
-    <div class="bf-method-items ${collapsed}" style="${collapsed ? 'display:none;' : ''}padding-left:4px">
+    <div class="bf-method-items bf-collapsed" style="display:none;padding-left:4px">
       ${itemsHtml}
     </div>
   </div>`;
@@ -91,6 +86,19 @@ export function bindMethodologyEvents(container: HTMLElement): void {
         e.preventDefault();
         toggle();
       }
+    });
+  });
+
+  container.querySelectorAll('.bf-method-card').forEach(card => {
+    card.addEventListener('click', () => {
+      const skill = (card as HTMLElement).dataset.skill;
+      if (!skill) return;
+      navigator.clipboard.writeText(skill).then(() => {
+        const el = card as HTMLElement;
+        const orig = el.style.outline;
+        el.style.outline = '1px solid var(--vscode-focusBorder, #007fd4)';
+        setTimeout(() => { el.style.outline = orig; }, 300);
+      }).catch(() => {});
     });
   });
 }

@@ -1,4 +1,4 @@
-import type { MethodologyItem, MethodologyGroup, MethodologySection, AgentGroup } from './types.js';
+import type { MethodologyItem, MethodologyGroup, MethodologySection } from './types.js';
 
 const PHASE_ORDER = [
   '1-discovery',
@@ -20,14 +20,6 @@ const PHASE_ALIASES: Record<string, string> = {
 };
 
 const PHASE_SET = new Set(PHASE_ORDER);
-
-function toAgentDisplayName(agentName: string): string {
-  return agentName
-    .replace(/^bmad-agent-/, '')
-    .split('-')
-    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(' ');
-}
 
 export function buildMethodologySections(items: MethodologyItem[]): MethodologySection[] {
   const phaseItems: MethodologyItem[] = [];
@@ -64,19 +56,7 @@ export function buildMethodologySections(items: MethodologyItem[]): MethodologyS
   }
 
   if (agentItems.length > 0) {
-    const grouped = new Map<string, MethodologyItem[]>();
-    for (const item of agentItems) {
-      const list = grouped.get(item.agentName);
-      if (list) list.push(item);
-      else grouped.set(item.agentName, [item]);
-    }
-    const agents: AgentGroup[] = [...grouped.entries()].map(([name, items]) => ({
-      agentName: name,
-      displayName: toAgentDisplayName(name),
-      items,
-    }));
-
-    sections.push({ kind: 'agents', displayName: 'Agent', icon: '🤖', agents });
+    sections.push({ kind: 'agents', displayName: '智能体', icon: '🤖', items: agentItems });
   }
 
   if (generalItems.length > 0) {
