@@ -62,9 +62,9 @@ development_status:
   4-3-归档执行器单元测试: done
   epic-4-retrospective: optional
 
-  epic-5: backlog
-  5-1-归档确认交互: backlog
-  5-2-归档成功后刷新版本视图: backlog
+  epic-5: done
+  5-1-归档确认交互: done
+  5-2-归档成功后刷新版本视图: done
   epic-5-retrospective: optional
 
   epic-6: backlog

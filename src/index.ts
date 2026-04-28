@@ -372,6 +372,20 @@ export function mount(container: HTMLElement, api: PluginAPI): void {
     ].join('');
 
     root.querySelector('#bf-refresh')?.addEventListener('click', () => load(api.context));
+    root.querySelector('#bf-archive')?.addEventListener('click', async () => {
+      if (!confirm(t.archiveConfirm)) return;
+      try {
+        const encPath = ctx.project?.path || '';
+        const updated = await api.rpc('POST', 'version/archive-current', { path: encPath }) as VersionedResponse;
+        versionedData = updated;
+        activeVersionId = updated.activeVersionId;
+        const av = getActiveVersion();
+        activeSprintNum = av?.activeSprint ?? 0;
+        renderVersioned(ctx);
+      } catch (err) {
+        alert((err as Error).message);
+      }
+    });
     root.querySelectorAll('.bf-version-tab').forEach(btn => {
       btn.addEventListener('click', () => {
         activeVersionId = (btn as HTMLElement).dataset.version || '';
