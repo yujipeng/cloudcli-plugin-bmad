@@ -5,6 +5,9 @@ node_modules/
 # mac 相关目录
 .DS_Store
 
+# worktree 隔离工作区
+.worktrees/
+
 # bmad 安装 相关目录
 .agents/
 .claude/
