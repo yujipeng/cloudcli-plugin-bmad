@@ -12,6 +12,7 @@ import { buildMethodologySections } from './methodologyViewModel.js';
 import { scanSkills } from './skillScanner.js';
 import { discoverVersionEntries } from './versionDiscovery.js';
 import { detectArchiveSuggestion } from './archiveSuggestion.js';
+import { archiveCurrentWorkspace } from './archiveExecutor.js';
 
 // ── Minimal YAML parser (flat key:value + nested map + comments) ──────
 
@@ -456,6 +457,67 @@ function getVersionedData(projectPath: string): VersionedResponse {
 
 const server = http.createServer((req, res) => {
   res.setHeader('Content-Type', 'application/json');
+
+  if (req.method === 'POST' && req.url?.startsWith('/version/archive-current')) {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', () => {
+      try {
+        const parsed = body ? JSON.parse(body) : {};
+        const projectPath = parsed.path;
+        if (!projectPath) {
+          res.writeHead(400);
+          res.end(JSON.stringify({ error: 'missing path in request body' }));
+          return;
+        }
+        const p = safePath(projectPath);
+        const paths = resolveBmadPaths(p);
+        const planBase = paths?.planningArtifacts || path.join(p, 'docs', 'planning-artifacts');
+        const implBase = paths?.implementationArtifacts || path.join(p, 'docs', 'implementation-artifacts');
+        const versions = discoverVersionEntries(planBase, implBase);
+        const currentVer = versions.find(v => v.kind === 'current');
+        if (!currentVer) {
+          res.writeHead(409);
+          res.end(JSON.stringify({ error: 'no current workspace to archive' }));
+          return;
+        }
+        const versionFlows = versions.map(v => {
+          const artifacts = detectArtifacts(v.planningDir, v.implementationDir);
+          const sprints = parseMultiSprint(v.implementationDir);
+          const activeSprint = sprints.find(s => s.active);
+          const sprint = activeSprint?.data ?? (artifacts.sprintStatus ? parseSprintStatus(v.implementationDir) : null);
+          const flowData: VersionFlowData = {
+            phases: computePhases(artifacts, sprint),
+            nextAction: computeNextAction(artifacts, sprint),
+            sprint, bmadDetected: true, configSource: paths?.source || 'defaults',
+            version: v, sprints, activeSprint: activeSprint?.sprintNumber ?? 0,
+          };
+          return flowData;
+        });
+        const currentFlow = versionFlows.find(vf => vf.version.kind === 'current')!;
+        const suggestion = detectArchiveSuggestion(currentFlow, versions);
+        if (!suggestion.enabled || !suggestion.targetVersion) {
+          res.writeHead(409);
+          res.end(JSON.stringify({ error: suggestion.reason || 'archive not allowed' }));
+          return;
+        }
+        const targetDir = path.join(path.dirname(planBase), suggestion.targetVersion);
+        const result = archiveCurrentWorkspace(planBase, implBase, targetDir);
+        if (!result.success) {
+          res.writeHead(500);
+          res.end(JSON.stringify({ error: result.error }));
+          return;
+        }
+        const updated = getVersionedData(p);
+        res.end(JSON.stringify(updated));
+      } catch (err) {
+        const code = (err as Error).message.includes('does not exist') ? 404 : 400;
+        res.writeHead(code);
+        res.end(JSON.stringify({ error: (err as Error).message }));
+      }
+    });
+    return;
+  }
 
   if (req.method === 'GET' && req.url?.startsWith('/versions')) {
     try {
