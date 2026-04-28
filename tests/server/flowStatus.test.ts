@@ -72,14 +72,25 @@ function makeBmadDir(base: string) {
   ].join('\n'));
 }
 
-function makeCompletedSprintYaml(): string {
+function makeSprintYaml(options?: {
+  storyStatus?: 'ready-for-dev' | 'review' | 'done';
+  retroStatus?: 'optional' | 'done';
+}): string {
+  const storyStatus = options?.storyStatus ?? 'done';
+  const retroStatus = options?.retroStatus ?? 'done';
+  const epicStatus = storyStatus === 'done' ? 'done' : 'in-progress';
+
   return [
     'project: test',
     'development_status:',
-    '  epic-1: done',
-    '  1-1-story: done',
-    '  epic-1-retrospective: done',
+    `  epic-1: ${epicStatus}`,
+    `  1-1-story: ${storyStatus}`,
+    `  epic-1-retrospective: ${retroStatus}`,
   ].join('\n');
+}
+
+function makeCompletedSprintYaml(): string {
+  return makeSprintYaml();
 }
 
 beforeEach(() => {
@@ -113,5 +124,48 @@ describe('/flow status after retrospectives complete', () => {
     const data = await requestJson(`/flow?path=${encodeURIComponent(tmpDir)}`);
 
     expect(data.nextAction).toBeNull();
+  });
+
+  it('does not fall back to discovery actions after retrospective is complete', async () => {
+    fs.rmSync(path.join(tmpDir, 'docs', 'planning-artifacts', 'prd.md'));
+
+    const data = await requestJson(`/flow?path=${encodeURIComponent(tmpDir)}`);
+
+    expect(data.nextAction).toBeNull();
+  });
+
+  it('prefers development actions once sprint work has started even when early docs are missing', async () => {
+    fs.rmSync(path.join(tmpDir, 'docs', 'planning-artifacts', 'prd.md'));
+    fs.writeFileSync(
+      path.join(tmpDir, 'docs', 'implementation-artifacts', 'sprint-status.yaml'),
+      makeSprintYaml({ storyStatus: 'ready-for-dev', retroStatus: 'optional' }),
+    );
+
+    const data = await requestJson(`/flow?path=${encodeURIComponent(tmpDir)}`);
+
+    expect(data.nextAction?.command).toBe('/bmad-dev-story');
+  });
+
+  it('keeps design recommendations when sprint status has no epics', async () => {
+    fs.rmSync(path.join(tmpDir, 'docs', 'planning-artifacts', 'architecture.md'));
+    fs.writeFileSync(
+      path.join(tmpDir, 'docs', 'implementation-artifacts', 'sprint-status.yaml'),
+      'project: test',
+    );
+
+    const data = await requestJson(`/flow?path=${encodeURIComponent(tmpDir)}`);
+
+    expect(data.nextAction?.command).toBe('/bmad-create-architecture');
+  });
+
+  it('keeps discovery recommendation when no later-stage evidence exists', async () => {
+    fs.rmSync(path.join(tmpDir, 'docs', 'planning-artifacts', 'prd.md'));
+    fs.rmSync(path.join(tmpDir, 'docs', 'planning-artifacts', 'epics.md'));
+    fs.rmSync(path.join(tmpDir, 'docs', 'planning-artifacts', 'architecture.md'));
+    fs.rmSync(path.join(tmpDir, 'docs', 'implementation-artifacts', 'sprint-status.yaml'));
+
+    const data = await requestJson(`/flow?path=${encodeURIComponent(tmpDir)}`);
+
+    expect(data.nextAction?.command).toBe('/bmad-product-brief');
   });
 });

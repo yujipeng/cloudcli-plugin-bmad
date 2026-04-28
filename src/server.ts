@@ -2,7 +2,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import type {
-  PhaseStatus, PhaseInfo, NextAction,
+  Phase, PhaseStatus, PhaseInfo, NextAction,
   StoryStatus, EpicEntry, SprintData, FlowData,
   MethodologyResponse,
   VersionInfo, VersionFlowData, VersionedResponse, SprintEntry,
@@ -133,6 +133,26 @@ interface Rule {
   action: NextAction;
 }
 
+const PHASE_ORDER: Phase[] = ['discovery', 'planning', 'design', 'development', 'retrospective'];
+
+function getPhaseRank(phase: Phase): number {
+  return PHASE_ORDER.indexOf(phase);
+}
+
+function computeProgressAnchor(a: ArtifactMap, sprint: SprintData | null): Phase | null {
+  const hasSprintEvidence = !!a.sprintStatus && !!sprint && sprint.epics.length > 0;
+  const allStoriesDone = hasSprintEvidence && sprint.epics.every(e => e.status === 'done');
+  const allRetrosDone = hasSprintEvidence && sprint.epics.every(e => e.retroStatus === 'done');
+
+  if (allRetrosDone) return 'retrospective';
+  if (allStoriesDone) return 'retrospective';
+  if (hasSprintEvidence) return 'development';
+  if (a.architecture || a.uxDesign) return 'design';
+  if (a.epics || a.prd) return 'planning';
+  if (a.productBrief) return 'discovery';
+  return null;
+}
+
 const RULES: Rule[] = [
   {
     condition: (a) => !a.productBrief && !a.prd,
@@ -173,9 +193,14 @@ const RULES: Rule[] = [
 ];
 
 function computeNextAction(a: ArtifactMap, sprint: SprintData | null): NextAction | null {
+  const anchor = computeProgressAnchor(a, sprint);
+  const minRank = anchor ? getPhaseRank(anchor) : -1;
+
   for (const rule of RULES) {
+    if (getPhaseRank(rule.action.phase) < minRank) continue;
     if (rule.condition(a, sprint)) return rule.action;
   }
+
   return null;
 }
 
