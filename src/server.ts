@@ -236,7 +236,7 @@ function discoverVersions(planBase: string, implBase: string): VersionInfo[] {
   const implLeaf = path.basename(implBase);
 
   if (!fs.existsSync(docsDir)) {
-    return [{ id: '__unversioned__', label: '', planningDir: planBase, implementationDir: implBase }];
+    return [{ id: '__unversioned__', label: '', kind: 'current' as const, planningDir: planBase, implementationDir: implBase }];
   }
 
   let vDirs: string[];
@@ -257,12 +257,13 @@ function discoverVersions(planBase: string, implBase: string): VersionInfo[] {
   }
 
   if (vDirs.length === 0) {
-    return [{ id: '__unversioned__', label: '', planningDir: planBase, implementationDir: implBase }];
+    return [{ id: '__unversioned__', label: '', kind: 'current' as const, planningDir: planBase, implementationDir: implBase }];
   }
 
   return vDirs.map(v => ({
     id: v,
     label: v.toUpperCase(),
+    kind: 'archived' as const,
     planningDir: path.join(docsDir, v, planLeaf),
     implementationDir: path.join(docsDir, v, implLeaf),
   }));
@@ -444,7 +445,7 @@ function getVersionedData(projectPath: string): VersionedResponse {
     return {
       versions: [{
         ...emptyFlow,
-        version: { id: '__unversioned__', label: '', planningDir: '', implementationDir: '' },
+        version: { id: '__unversioned__', label: '', kind: 'current' as const, planningDir: '', implementationDir: '' },
         sprints: [], activeSprint: 0,
       }],
       activeVersionId: '__unversioned__',

@@ -76,9 +76,12 @@ export interface SprintEntry {
   active: boolean;
 }
 
+export type VersionKind = 'current' | 'archived';
+
 export interface VersionInfo {
   id: string;
   label: string;
+  kind: VersionKind;
   planningDir: string;
   implementationDir: string;
 }

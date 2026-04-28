@@ -382,7 +382,7 @@ export function mount(container: HTMLElement, api: PluginAPI): void {
       } else {
         const flowData = await api.rpc('GET', `flow?path=${enc}`) as FlowData;
         versionedData = {
-          versions: [{ ...flowData, version: { id: '__unversioned__', label: '', planningDir: '', implementationDir: '' }, sprints: [], activeSprint: 0 }],
+          versions: [{ ...flowData, version: { id: '__unversioned__', label: '', kind: 'current' as const, planningDir: '', implementationDir: '' }, sprints: [], activeSprint: 0 }],
           activeVersionId: '__unversioned__', unversioned: true,
         };
         activeVersionId = '__unversioned__';
