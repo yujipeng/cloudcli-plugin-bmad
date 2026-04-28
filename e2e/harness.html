@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>bmad-flow E2E harness</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #08080f; }
+    #container { height: 100vh; }
+  </style>
+</head>
+<body>
+  <div id="container"></div>
+  <script type="module">
+    import { mount } from '/dist/index.js';
+
+    // Scenario is driven by ?scenario= query param
+    const params = new URLSearchParams(location.search);
+    const scenario = params.get('scenario') || 'current-workspace';
+
+    // ── Shared helpers ────────────────────────────────────────────────
+    const baseCtx = {
+      theme: 'dark',
+      locale: 'en',
+      project: { name: 'my-project', path: '/tmp/my-project' },
+      session: null,
+    };
+
+    const pendingPhases = [
+      { phase: 'discovery',     label: 'Discovery',     icon: '🔍', status: 'pending' },
+      { phase: 'planning',      label: 'Planning',      icon: '📋', status: 'pending' },
+      { phase: 'design',        label: 'Design',        icon: '🎨', status: 'pending' },
+      { phase: 'development',   label: 'Development',   icon: '💻', status: 'pending' },
+      { phase: 'retrospective', label: 'Retrospective', icon: '🔄', status: 'pending' },
+    ];
+
+    const activePhases = [
+      { phase: 'discovery',     label: 'Discovery',     icon: '🔍', status: 'done' },
+      { phase: 'planning',      label: 'Planning',      icon: '📋', status: 'done' },
+      { phase: 'design',        label: 'Design',        icon: '🎨', status: 'active' },
+      { phase: 'development',   label: 'Development',   icon: '💻', status: 'pending' },
+      { phase: 'retrospective', label: 'Retrospective', icon: '🔄', status: 'pending' },
+    ];
+
+    const donePhases = activePhases.map(p => ({ ...p, status: 'done' }));
+
+    const baseSprint = {
+      project: 'my-project',
+      epics: [{ key: 'EPIC-1', status: 'active', stories: [{ key: 'STORY-1', status: 'done' }] }],
+      totalStories: 1,
+      doneStories: 1,
+    };
+
+    function makeVersioned(versions, activeVersionId) {
+      return { versions, activeVersionId, unversioned: false };
+    }
+
+    function makeVersion(id, label, kind, phases, extra = {}) {
+      return {
+        version: { id, label, kind, planningDir: '', implementationDir: '' },
+        phases,
+        nextAction: null,
+        sprint: baseSprint,
+        sprints: [],
+        activeSprint: 0,
+        bmadDetected: true,
+        configSource: '',
+        ...extra,
+      };
+    }
+
+    // ── Scenarios ─────────────────────────────────────────────────────
+    const SCENARIOS = {
+      // 1. Current workspace tab — active phases, no archive suggestion
+      'current-workspace': {
+        ctx: baseCtx,
+        rpc: async () => makeVersioned([
+          makeVersion('current', 'Current', 'current', activePhases),
+        ], 'current'),
+      },
+
+      // 2. Archived version tab — current + one archived version
+      'archived-version': {
+        ctx: baseCtx,
+        rpc: async () => makeVersioned([
+          makeVersion('current', 'Current', 'current', activePhases),
+          makeVersion('v1', 'v1', 'archived', donePhases),
+        ], 'current'),
+      },
+
+      // 3. Current workspace empty state (all phases pending, bmadDetected=true)
+      'current-empty': {
+        ctx: baseCtx,
+        rpc: async () => makeVersioned([
+          makeVersion('current', 'Current', 'current', pendingPhases),
+        ], 'current'),
+      },
+
+      // 4. Archive suggestion card visible
+      'archive-suggestion': {
+        ctx: baseCtx,
+        rpc: async () => makeVersioned([
+          makeVersion('current', 'Current', 'current', donePhases, {
+            archiveSuggestion: { enabled: true, targetVersion: 'v1' },
+          }),
+        ], 'current'),
+      },
+
+      // 5. Archive button — confirm + refresh flow
+      'archive-confirm': {
+        ctx: baseCtx,
+        rpc: async (method, path) => {
+          if (method === 'POST' && path === 'version/archive-current') {
+            // After archive: return a fresh current + archived v1
+            return makeVersioned([
+              makeVersion('current', 'Current', 'current', pendingPhases),
+              makeVersion('v1', 'v1', 'archived', donePhases),
+            ], 'current');
+          }
+          return makeVersioned([
+            makeVersion('current', 'Current', 'current', donePhases, {
+              archiveSuggestion: { enabled: true, targetVersion: 'v1' },
+            }),
+          ], 'current');
+        },
+      },
+    };
+
+    const s = SCENARIOS[scenario];
+    if (!s) {
+      document.body.textContent = 'Unknown scenario: ' + scenario;
+    } else {
+      let ctxCallback = null;
+      const api = {
+        context: s.ctx,
+        onContextChange(cb) { ctxCallback = cb; return () => {}; },
+        rpc: (method, path, body) => s.rpc(method, path, body),
+      };
+      mount(document.getElementById('container'), api);
+    }
+  </script>
+</body>
+</html>
