@@ -196,9 +196,18 @@ describe('multi-sprint within a version', () => {
 });
 
 describe('/flow endpoint backwards compatibility', () => {
-  it('still works for the current project', async () => {
-    const repoPath = path.resolve(process.cwd());
-    const data = await requestJson(`/flow?path=${encodeURIComponent(repoPath)}`);
+  it('still works for a flat artifact project', async () => {
+    makeBmadDir(tmpDir);
+    const planDir = path.join(tmpDir, 'docs', 'planning-artifacts');
+    const implDir = path.join(tmpDir, 'docs', 'implementation-artifacts');
+    fs.mkdirSync(planDir, { recursive: true });
+    fs.mkdirSync(implDir, { recursive: true });
+    fs.writeFileSync(path.join(planDir, 'prd.md'), '# PRD');
+    fs.writeFileSync(path.join(planDir, 'epics.md'), '# Epics');
+    fs.writeFileSync(path.join(planDir, 'architecture.md'), '# Architecture');
+    fs.writeFileSync(path.join(implDir, 'sprint-status.yaml'), makeSprintYaml(true));
+
+    const data = await requestJson(`/flow?path=${encodeURIComponent(tmpDir)}`);
     expect(data.bmadDetected).toBe(true);
     expect(data.phases).toBeDefined();
   });
