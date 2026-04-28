@@ -37,13 +37,13 @@ tracking_system: file-system
 story_location: docs/implementation-artifacts
 
 development_status:
-  epic-1: in-progress
+  epic-1: done
   1-1-扩展-versioninfo-增加-kind-字段: done
-  1-2-新增-archivesuggestion-类型与-versionflowdata-扩展: in-progress
+  1-2-新增-archivesuggestion-类型与-versionflowdata-扩展: done
   epic-1-retrospective: optional
 
-  epic-2: backlog
-  2-1-拆出-versiondiscovery-模块: backlog
+  epic-2: in-progress
+  2-1-拆出-versiondiscovery-模块: in-progress
   2-2-改造版本发现支持-current-与-archived-并存: backlog
   2-3-实现-archivesuggestion-检测: backlog
   2-4-集成到-versions-端点: backlog
