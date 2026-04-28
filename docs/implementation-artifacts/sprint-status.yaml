@@ -1,5 +1,5 @@
 # generated: 2026-04-28T14:20:00Z
-# last_updated: 2026-04-28T14:20:00Z
+# last_updated: 2026-04-28T19:31:00Z
 # project: bmad-flow
 # project_key: NOKEY
 # tracking_system: file-system
@@ -30,7 +30,7 @@
 # - Epic 1 / Story 1-1 is the first recommended execution starting point
 
 generated: 2026-04-28T14:20:00Z
-last_updated: 2026-04-28T14:20:00Z
+last_updated: 2026-04-28T19:31:00Z
 project: bmad-flow
 project_key: NOKEY
 tracking_system: file-system
@@ -40,7 +40,7 @@ development_status:
   epic-1: done
   1-1-扩展-versioninfo-增加-kind-字段: done
   1-2-新增-archivesuggestion-类型与-versionflowdata-扩展: done
-  epic-1-retrospective: optional
+  epic-1-retrospective: done
 
   epic-2: done
   2-1-拆出-versiondiscovery-模块: done
@@ -48,25 +48,25 @@ development_status:
   2-3-实现-archivesuggestion-检测: done
   2-4-集成到-versions-端点: done
   2-5-版本发现与归档建议单元测试: done
-  epic-2-retrospective: optional
+  epic-2-retrospective: done
 
   epic-3: done
   3-1-版本页签支持-current-与-archived-语义: done
   3-2-current-workspace-空状态渲染: done
   3-3-archivesuggestion-卡片渲染: done
-  epic-3-retrospective: optional
+  epic-3-retrospective: done
 
   epic-4: done
   4-1-实现归档执行器: done
   4-2-新增-post-version-archive-current-路由: done
   4-3-归档执行器单元测试: done
-  epic-4-retrospective: optional
+  epic-4-retrospective: done
 
   epic-5: done
   5-1-归档确认交互: done
   5-2-归档成功后刷新版本视图: done
-  epic-5-retrospective: optional
+  epic-5-retrospective: done
 
   epic-6: done
   6-1-现有多版本与多-sprint-回归测试: done
-  epic-6-retrospective: optional
+  epic-6-retrospective: done
