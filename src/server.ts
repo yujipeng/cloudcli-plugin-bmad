@@ -10,6 +10,9 @@ import type {
 import { parseMethodologyCsv } from './methodologyParser.js';
 import { buildMethodologySections } from './methodologyViewModel.js';
 import { scanSkills } from './skillScanner.js';
+import { discoverVersionEntries } from './versionDiscovery.js';
+import { detectArchiveSuggestion } from './archiveSuggestion.js';
+import { archiveCurrentWorkspace } from './archiveExecutor.js';
 
 // ── Minimal YAML parser (flat key:value + nested map + comments) ──────
 
@@ -228,46 +231,6 @@ function parseSprintStatus(implDir: string): SprintData | null {
   }
 }
 
-// ── Version discovery ────────────────────────────────────────────────
-
-function discoverVersions(planBase: string, implBase: string): VersionInfo[] {
-  const docsDir = path.dirname(planBase);
-  const planLeaf = path.basename(planBase);
-  const implLeaf = path.basename(implBase);
-
-  if (!fs.existsSync(docsDir)) {
-    return [{ id: '__unversioned__', label: '', planningDir: planBase, implementationDir: implBase }];
-  }
-
-  let vDirs: string[];
-  try {
-    vDirs = fs.readdirSync(docsDir)
-      .filter(d => /^v\d+$/.test(d))
-      .filter(d => {
-        const full = path.join(docsDir, d);
-        try { return fs.statSync(full).isDirectory(); } catch { return false; }
-      })
-      .filter(d => {
-        const vPath = path.join(docsDir, d);
-        return fs.existsSync(path.join(vPath, planLeaf)) || fs.existsSync(path.join(vPath, implLeaf));
-      })
-      .sort((a, b) => parseInt(a.slice(1)) - parseInt(b.slice(1)));
-  } catch {
-    vDirs = [];
-  }
-
-  if (vDirs.length === 0) {
-    return [{ id: '__unversioned__', label: '', planningDir: planBase, implementationDir: implBase }];
-  }
-
-  return vDirs.map(v => ({
-    id: v,
-    label: v.toUpperCase(),
-    planningDir: path.join(docsDir, v, planLeaf),
-    implementationDir: path.join(docsDir, v, implLeaf),
-  }));
-}
-
 // ── Multi-sprint parser ──────────────────────────────────────────────
 
 function parseMultiSprint(implDir: string): SprintEntry[] {
@@ -444,7 +407,7 @@ function getVersionedData(projectPath: string): VersionedResponse {
     return {
       versions: [{
         ...emptyFlow,
-        version: { id: '__unversioned__', label: '', planningDir: '', implementationDir: '' },
+        version: { id: '__unversioned__', label: '', kind: 'current' as const, planningDir: '', implementationDir: '' },
         sprints: [], activeSprint: 0,
       }],
       activeVersionId: '__unversioned__',
@@ -455,16 +418,15 @@ function getVersionedData(projectPath: string): VersionedResponse {
   const paths = resolveBmadPaths(p);
   const planBase = paths?.planningArtifacts || path.join(p, 'docs', 'planning-artifacts');
   const implBase = paths?.implementationArtifacts || path.join(p, 'docs', 'implementation-artifacts');
-  const versions = discoverVersions(planBase, implBase);
-  const unversioned = versions.length === 1 && versions[0].id === '__unversioned__';
+  const versions = discoverVersionEntries(planBase, implBase);
+  const unversioned = versions.length === 1 && versions[0].id === '__current__' && !versions.some(v => v.kind === 'archived');
 
   const versionFlows: VersionFlowData[] = versions.map(v => {
     const artifacts = detectArtifacts(v.planningDir, v.implementationDir);
     const sprints = parseMultiSprint(v.implementationDir);
     const activeSprint = sprints.find(s => s.active);
     const sprint = activeSprint?.data ?? (artifacts.sprintStatus ? parseSprintStatus(v.implementationDir) : null);
-
-    return {
+    const flowData: VersionFlowData = {
       phases: computePhases(artifacts, sprint),
       nextAction: computeNextAction(artifacts, sprint),
       sprint,
@@ -474,12 +436,16 @@ function getVersionedData(projectPath: string): VersionedResponse {
       sprints,
       activeSprint: activeSprint?.sprintNumber ?? 0,
     };
+    if (v.kind === 'current') {
+      flowData.archiveSuggestion = detectArchiveSuggestion(flowData, versions);
+    }
+    return flowData;
   });
 
-  let activeVersionId = versions[versions.length - 1].id;
-  for (let i = versionFlows.length - 1; i >= 0; i--) {
-    if (versionFlows[i].phases.some(ph => ph.status === 'active')) {
-      activeVersionId = versionFlows[i].version.id;
+  let activeVersionId = versions[0]?.id || '__current__';
+  for (const vf of versionFlows) {
+    if (vf.version.kind === 'current' && vf.phases.some(ph => ph.status === 'active')) {
+      activeVersionId = vf.version.id;
       break;
     }
   }
@@ -491,6 +457,67 @@ function getVersionedData(projectPath: string): VersionedResponse {
 
 const server = http.createServer((req, res) => {
   res.setHeader('Content-Type', 'application/json');
+
+  if (req.method === 'POST' && req.url?.startsWith('/version/archive-current')) {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', () => {
+      try {
+        const parsed = body ? JSON.parse(body) : {};
+        const projectPath = parsed.path;
+        if (!projectPath) {
+          res.writeHead(400);
+          res.end(JSON.stringify({ error: 'missing path in request body' }));
+          return;
+        }
+        const p = safePath(projectPath);
+        const paths = resolveBmadPaths(p);
+        const planBase = paths?.planningArtifacts || path.join(p, 'docs', 'planning-artifacts');
+        const implBase = paths?.implementationArtifacts || path.join(p, 'docs', 'implementation-artifacts');
+        const versions = discoverVersionEntries(planBase, implBase);
+        const currentVer = versions.find(v => v.kind === 'current');
+        if (!currentVer) {
+          res.writeHead(409);
+          res.end(JSON.stringify({ error: 'no current workspace to archive' }));
+          return;
+        }
+        const versionFlows = versions.map(v => {
+          const artifacts = detectArtifacts(v.planningDir, v.implementationDir);
+          const sprints = parseMultiSprint(v.implementationDir);
+          const activeSprint = sprints.find(s => s.active);
+          const sprint = activeSprint?.data ?? (artifacts.sprintStatus ? parseSprintStatus(v.implementationDir) : null);
+          const flowData: VersionFlowData = {
+            phases: computePhases(artifacts, sprint),
+            nextAction: computeNextAction(artifacts, sprint),
+            sprint, bmadDetected: true, configSource: paths?.source || 'defaults',
+            version: v, sprints, activeSprint: activeSprint?.sprintNumber ?? 0,
+          };
+          return flowData;
+        });
+        const currentFlow = versionFlows.find(vf => vf.version.kind === 'current')!;
+        const suggestion = detectArchiveSuggestion(currentFlow, versions);
+        if (!suggestion.enabled || !suggestion.targetVersion) {
+          res.writeHead(409);
+          res.end(JSON.stringify({ error: suggestion.reason || 'archive not allowed' }));
+          return;
+        }
+        const targetDir = path.join(path.dirname(planBase), suggestion.targetVersion);
+        const result = archiveCurrentWorkspace(planBase, implBase, targetDir);
+        if (!result.success) {
+          res.writeHead(500);
+          res.end(JSON.stringify({ error: result.error }));
+          return;
+        }
+        const updated = getVersionedData(p);
+        res.end(JSON.stringify(updated));
+      } catch (err) {
+        const code = (err as Error).message.includes('does not exist') ? 404 : 400;
+        res.writeHead(code);
+        res.end(JSON.stringify({ error: (err as Error).message }));
+      }
+    });
+    return;
+  }
 
   if (req.method === 'GET' && req.url?.startsWith('/versions')) {
     try {

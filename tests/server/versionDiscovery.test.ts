@@ -72,7 +72,7 @@ afterEach(() => {
 });
 
 describe('/versions endpoint', () => {
-  it('returns unversioned for flat artifact structure', async () => {
+  it('returns current workspace for flat artifact structure', async () => {
     makeBmadDir(tmpDir);
     const planDir = path.join(tmpDir, 'docs', 'planning-artifacts');
     fs.mkdirSync(planDir, { recursive: true });
@@ -81,7 +81,8 @@ describe('/versions endpoint', () => {
     const data = await requestJson(`/versions?path=${encodeURIComponent(tmpDir)}`);
     expect(data.unversioned).toBe(true);
     expect(data.versions).toHaveLength(1);
-    expect(data.versions[0].version.id).toBe('__unversioned__');
+    expect(data.versions[0].version.id).toBe('__current__');
+    expect(data.versions[0].version.kind).toBe('current');
   });
 
   it('discovers v1 and v2 directories', async () => {
@@ -95,8 +96,8 @@ describe('/versions endpoint', () => {
     const data = await requestJson(`/versions?path=${encodeURIComponent(tmpDir)}`);
     expect(data.unversioned).toBe(false);
     expect(data.versions).toHaveLength(2);
-    expect(data.versions[0].version.id).toBe('v1');
-    expect(data.versions[1].version.id).toBe('v2');
+    expect(data.versions.some((v: any) => v.version.id === 'v1')).toBe(true);
+    expect(data.versions.some((v: any) => v.version.id === 'v2')).toBe(true);
   });
 
   it('skips version dirs without artifact subdirectories', async () => {
@@ -130,8 +131,8 @@ describe('/versions endpoint', () => {
     const data = await requestJson(`/versions?path=${encodeURIComponent(tmpDir)}`);
     expect(data.versions).toHaveLength(2);
 
-    const v1 = data.versions[0];
-    const v2 = data.versions[1];
+    const v1 = data.versions.find((v: any) => v.version.id === 'v1');
+    const v2 = data.versions.find((v: any) => v.version.id === 'v2');
     expect(v1.phases.find((p: any) => p.phase === 'design').status).toBe('done');
     expect(v2.phases.find((p: any) => p.phase === 'design').status).toBe('pending');
   });
@@ -171,7 +172,7 @@ describe('multi-sprint within a version', () => {
     fs.writeFileSync(path.join(v1Impl, 'sprint-status-2.yaml'), makeSprintYaml(false));
 
     const data = await requestJson(`/versions?path=${encodeURIComponent(tmpDir)}`);
-    const v1 = data.versions[0];
+    const v1 = data.versions.find((v: any) => v.version.id === 'v1');
     expect(v1.sprints).toHaveLength(2);
     expect(v1.sprints[0].sprintNumber).toBe(1);
     expect(v1.sprints[1].sprintNumber).toBe(2);
@@ -190,15 +191,24 @@ describe('multi-sprint within a version', () => {
     fs.writeFileSync(path.join(v1Impl, 'sprint-status-2.yaml'), makeSprintYaml(true));
 
     const data = await requestJson(`/versions?path=${encodeURIComponent(tmpDir)}`);
-    const v1 = data.versions[0];
+    const v1 = data.versions.find((v: any) => v.version.id === 'v1');
     expect(v1.sprints[1].active).toBe(true);
   });
 });
 
 describe('/flow endpoint backwards compatibility', () => {
-  it('still works for the current project', async () => {
-    const repoPath = path.resolve(process.cwd());
-    const data = await requestJson(`/flow?path=${encodeURIComponent(repoPath)}`);
+  it('still works for a flat artifact project', async () => {
+    makeBmadDir(tmpDir);
+    const planDir = path.join(tmpDir, 'docs', 'planning-artifacts');
+    const implDir = path.join(tmpDir, 'docs', 'implementation-artifacts');
+    fs.mkdirSync(planDir, { recursive: true });
+    fs.mkdirSync(implDir, { recursive: true });
+    fs.writeFileSync(path.join(planDir, 'prd.md'), '# PRD');
+    fs.writeFileSync(path.join(planDir, 'epics.md'), '# Epics');
+    fs.writeFileSync(path.join(planDir, 'architecture.md'), '# Architecture');
+    fs.writeFileSync(path.join(implDir, 'sprint-status.yaml'), makeSprintYaml(true));
+
+    const data = await requestJson(`/flow?path=${encodeURIComponent(tmpDir)}`);
     expect(data.bmadDetected).toBe(true);
     expect(data.phases).toBeDefined();
   });

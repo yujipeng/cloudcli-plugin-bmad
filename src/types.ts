@@ -76,17 +76,27 @@ export interface SprintEntry {
   active: boolean;
 }
 
+export type VersionKind = 'current' | 'archived';
+
 export interface VersionInfo {
   id: string;
   label: string;
+  kind: VersionKind;
   planningDir: string;
   implementationDir: string;
+}
+
+export interface ArchiveSuggestion {
+  enabled: boolean;
+  targetVersion?: string;
+  reason?: string;
 }
 
 export interface VersionFlowData extends FlowData {
   version: VersionInfo;
   sprints: SprintEntry[];
   activeSprint: number;
+  archiveSuggestion?: ArchiveSuggestion;
 }
 
 export interface VersionedResponse {
