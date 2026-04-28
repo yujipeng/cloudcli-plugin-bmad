@@ -17,6 +17,12 @@ interface I18nStrings {
   noBmadHint: string;
   version: string;
   sprint: string;
+  currentIterationNotStarted: string;
+  currentIterationHint: string;
+  archiveTitle: string;
+  archiveDesc: string;
+  archiveBtn: string;
+  archiveConfirm: string;
 }
 
 const I18N: Record<Locale, I18nStrings> = {
@@ -33,6 +39,12 @@ const I18N: Record<Locale, I18nStrings> = {
     noBmadHint: '运行以下命令初始化 Bmad 方法论：',
     version: '版本',
     sprint: 'Sprint',
+    currentIterationNotStarted: '当前迭代尚未开始',
+    currentIterationHint: '可从以下命令开始新一轮迭代：',
+    archiveTitle: '当前版本已完成',
+    archiveDesc: '可归档为',
+    archiveBtn: '归档为',
+    archiveConfirm: '确认归档？当前工作区将迁移到历史版本目录，并重建空的当前工作区。',
   },
   en: {
     phases: { discovery: 'Discovery', planning: 'Planning', design: 'Design', development: 'Development', retrospective: 'Retrospective' },
@@ -47,6 +59,12 @@ const I18N: Record<Locale, I18nStrings> = {
     noBmadHint: 'Run the following command to initialize Bmad methodology:',
     version: 'Version',
     sprint: 'Sprint',
+    currentIterationNotStarted: 'Current iteration not started',
+    currentIterationHint: 'Start a new iteration with:',
+    archiveTitle: 'Current version complete',
+    archiveDesc: 'Archive as',
+    archiveBtn: 'Archive as',
+    archiveConfirm: 'Confirm archive? Current workspace will be moved to a versioned directory and a fresh workspace will be created.',
   },
 };
 
@@ -132,18 +150,19 @@ function renderNextAction(na: NextAction, c: TC, t: I18nStrings): string {
 // ── Version tabs renderer ────────────────────────────────────────────
 
 function renderVersionTabs(versions: VersionFlowData[], activeId: string, c: TC): string {
-  if (versions.length <= 1 && versions[0]?.version.id === '__unversioned__') return '';
+  if (versions.length <= 1 && versions[0]?.version.kind === 'current' && !versions.some(v => v.version.kind === 'archived')) return '';
   return `<div class="bf-version-tabs" style="display:flex;gap:2px;margin-bottom:16px;border-bottom:1px solid ${c.border};padding-bottom:0">
     ${versions.map(v => {
       const active = v.version.id === activeId;
+      const isCurrent = v.version.kind === 'current';
       const color = v.phases.every(p => p.status === 'done') ? c.green
         : v.phases.some(p => p.status === 'active') ? c.yellow : c.muted;
       return `<button class="bf-version-tab" data-version="${v.version.id}"
         style="padding:6px 14px;font-family:${MONO};font-size:0.65rem;
         background:transparent;border:none;border-bottom:2px solid ${active ? c.accent : 'transparent'};
-        color:${active ? c.text : c.muted};cursor:pointer">
+        color:${active ? c.text : c.muted};cursor:pointer;${isCurrent ? 'font-weight:600' : ''}">
         <span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${color};margin-right:6px"></span>
-        ${v.version.label}
+        ${v.version.label || v.version.id}
       </button>`;
     }).join('')}
   </div>`;
@@ -327,11 +346,26 @@ export function mount(container: HTMLElement, api: PluginAPI): void {
     const vTabsHtml = renderVersionTabs(versionedData.versions, activeVersionId, c);
     const sSelectorHtml = ver.sprints.length > 1 ? renderSprintSelector(ver.sprints, activeSprintNum, c) : '';
 
+    const isCurrentEmpty = ver.version.kind === 'current' && ver.phases.every(p => p.status === 'pending');
+    const archiveSuggestion = ver.archiveSuggestion;
+
+    let archiveCardHtml = '';
+    if (archiveSuggestion?.enabled && archiveSuggestion.targetVersion) {
+      const tv = esc(archiveSuggestion.targetVersion);
+      archiveCardHtml = `<div class="bf-up" style="background:${c.dim};border:1px solid ${c.green};border-radius:4px;padding:16px;margin-bottom:20px;animation-delay:0.15s"><div style="font-size:0.6rem;color:${c.green};letter-spacing:0.1em;text-transform:uppercase;margin-bottom:8px">${t.archiveTitle}</div><div style="display:flex;align-items:center;justify-content:space-between"><div style="font-size:0.72rem;color:${c.text}">${t.archiveDesc} ${tv}</div><button id="bf-archive" style="padding:5px 14px;background:${c.green};border:none;color:#fff;font-family:${MONO};font-size:0.65rem;border-radius:3px;cursor:pointer">${t.archiveBtn} ${tv}</button></div></div>`;
+    }
+
+    let emptyCurrentHtml = '';
+    if (isCurrentEmpty) {
+      emptyCurrentHtml = `<div class="bf-up" style="background:${c.surface};border:1px solid ${c.border};border-radius:4px;padding:20px;margin-bottom:20px;text-align:center;animation-delay:0.2s"><div style="font-size:0.78rem;color:${c.text};margin-bottom:8px">${t.currentIterationNotStarted}</div><div style="font-size:0.65rem;color:${c.muted};margin-bottom:12px">${t.currentIterationHint}</div><code style="font-size:0.65rem;color:${c.accent};background:${c.dim};padding:4px 10px;border-radius:3px">/bmad-product-brief</code></div>`;
+    }
+
     root.innerHTML = [
       `<div class="bf-up" style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px"><div style="min-width:0;flex:1"><div style="font-size:1.1rem;font-weight:700;word-break:break-all">${name}<span style="color:${c.accent}">&#x258C;</span></div><div style="font-size:0.65rem;color:${c.muted};margin-top:4px;word-break:break-all">${projPath}</div></div><button id="bf-refresh" style="flex-shrink:0;margin-left:16px;padding:5px 12px;background:transparent;border:1px solid ${c.border};color:${c.muted};font-family:${MONO};font-size:0.65rem;border-radius:3px;cursor:pointer">${t.refresh}</button></div>`,
       vTabsHtml,
-      renderPhases(ver.phases, c, t),
-      ver.nextAction ? renderNextAction(ver.nextAction, c, t) : '',
+      archiveCardHtml,
+      isCurrentEmpty ? emptyCurrentHtml : renderPhases(ver.phases, c, t),
+      !isCurrentEmpty && ver.nextAction ? renderNextAction(ver.nextAction, c, t) : '',
       sSelectorHtml,
       sprintToShow ? renderSprint(sprintToShow, c, t) : '',
       methodologyData ? renderMethodology(methodologyData, c, MONO) : '',
