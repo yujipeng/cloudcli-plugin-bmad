@@ -86,10 +86,17 @@ export interface VersionInfo {
   implementationDir: string;
 }
 
+export interface ArchiveSuggestion {
+  enabled: boolean;
+  targetVersion?: string;
+  reason?: string;
+}
+
 export interface VersionFlowData extends FlowData {
   version: VersionInfo;
   sprints: SprintEntry[];
   activeSprint: number;
+  archiveSuggestion?: ArchiveSuggestion;
 }
 
 export interface VersionedResponse {

@@ -38,8 +38,8 @@ story_location: docs/implementation-artifacts
 
 development_status:
   epic-1: in-progress
-  1-1-扩展-versioninfo-增加-kind-字段: in-progress
-  1-2-新增-archivesuggestion-类型与-versionflowdata-扩展: backlog
+  1-1-扩展-versioninfo-增加-kind-字段: done
+  1-2-新增-archivesuggestion-类型与-versionflowdata-扩展: in-progress
   epic-1-retrospective: optional
 
   epic-2: backlog
