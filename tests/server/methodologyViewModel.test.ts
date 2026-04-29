@@ -3,7 +3,7 @@ import { groupByPhase, buildMethodologySections } from '../../src/methodologyVie
 import type { MethodologyItem } from '../../src/types.js';
 
 function item(phase: string, name: string, overrides?: Partial<MethodologyItem>): MethodologyItem {
-  return { skill: `bmad-${name}`, displayName: name, menuCode: '', description: '', required: false, category: 'workflow', phase, module: 'BMad Method', agentName: '', ...overrides };
+  return { skill: `bmad-${name}`, displayName: name, menuCode: '', description: '', required: false, priority: 'optional', category: 'workflow', phase, module: 'BMad Method', agentName: '', ...overrides };
 }
 
 describe('groupByPhase', () => {

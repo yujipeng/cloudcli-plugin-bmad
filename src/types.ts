@@ -108,6 +108,7 @@ export interface VersionedResponse {
 // ── Methodology types ────────────────────────────────────────────────
 
 export type MethodologyCategory = 'workflow' | 'agent' | 'tool';
+export type MethodologyPriority = 'required' | 'recommended' | 'optional';
 
 export interface MethodologyItem {
   skill: string;
@@ -115,6 +116,7 @@ export interface MethodologyItem {
   menuCode?: string;
   description: string;
   required: boolean;
+  priority: MethodologyPriority;
   category: MethodologyCategory;
   phase: string;
   module?: string;

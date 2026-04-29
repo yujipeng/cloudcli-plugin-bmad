@@ -1,13 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import { parseMethodologyCsv } from '../../src/methodologyParser.js';
 
-const HEADER = 'module,phase,name,code,sequence,workflow-file,command,required,agent-name,agent-command,agent-display-name,agent-title,options,description,output-location,outputs';
+// New 13-column format: module,skill,display-name,menu-code,description,action,args,phase,after,before,required,output-location,outputs
+const HEADER = 'module,skill,display-name,menu-code,description,action,args,phase,after,before,required,output-location,outputs';
 
 describe('parseMethodologyCsv', () => {
   it('parses a normal CSV row into MethodologyItem', () => {
     const csv = [
       HEADER,
-      'BMad Method,1-analysis,Brainstorm Project,BP,,bmad-brainstorming,,false,,,,,false,Expert guided facilitation.,planning_artifacts,brainstorming session',
+      'BMad Method,bmad-brainstorming,Brainstorm Project,BP,Expert guided facilitation.,,,1-analysis,,,false,planning_artifacts,brainstorming session',
     ].join('\n');
 
     const items = parseMethodologyCsv(csv);
@@ -18,6 +19,7 @@ describe('parseMethodologyCsv', () => {
       menuCode: 'BP',
       description: 'Expert guided facilitation.',
       required: false,
+      priority: 'optional',
       category: 'workflow',
       phase: '1-analysis',
       module: 'BMad Method',
@@ -28,8 +30,8 @@ describe('parseMethodologyCsv', () => {
   it('filters out _meta rows', () => {
     const csv = [
       HEADER,
-      'BMad Method,_meta,,,,,,false,,,,,,,https://docs.bmad-method.org/llms.txt,',
-      'BMad Method,anytime,BMad Help,BH,,bmad-help,,false,,,,,false,,,',
+      'BMad Method,_meta,,,,,,,,,false,https://docs.bmad-method.org/llms.txt,',
+      'BMad Method,bmad-help,BMad Help,BH,,,anytime,,,false,,',
     ].join('\n');
 
     const items = parseMethodologyCsv(csv);
@@ -40,47 +42,38 @@ describe('parseMethodologyCsv', () => {
   it('uses default values for missing columns', () => {
     const csv = [
       HEADER,
-      'BMad Method,2-planning',
+      'BMad Method,bmad-foo',
     ].join('\n');
 
     const items = parseMethodologyCsv(csv);
     expect(items).toHaveLength(1);
     expect(items[0]).toMatchObject({
+      skill: 'bmad-foo',
       displayName: '',
       menuCode: '',
       description: '',
       required: false,
-      category: 'tool',
-      phase: '2-planning',
+      priority: 'optional',
+      phase: 'anytime',
     });
   });
 
-  it('detects agent category from agent-name field', () => {
+  it('detects agent category from skill name prefix', () => {
     const csv = [
       HEADER,
-      'BMad Method,anytime,Write Document,WD,,bmad-agent-tech-writer,,false,tech-writer,,,,,Write docs.,project-knowledge,document',
+      'BMad Method,bmad-agent-tech-writer,Write Document,WD,Write docs.,write,,anytime,,,false,project-knowledge,document',
     ].join('\n');
 
     const items = parseMethodologyCsv(csv);
     expect(items[0].category).toBe('agent');
-  });
-
-  it('detects agent-name-as-phase pattern and normalizes phase', () => {
-    const csv = [
-      HEADER,
-      'BMad Method,bmad-agent-tech-writer,Write Document,WD,"Describe in detail",write,,anytime,,,,,,false,project-knowledge,document',
-    ].join('\n');
-
-    const items = parseMethodologyCsv(csv);
-    expect(items[0].phase).toBe('agent');
     expect(items[0].agentName).toBe('bmad-agent-tech-writer');
-    expect(items[0].skill).toBe('write');
+    expect(items[0].phase).toBe('agent');
   });
 
   it('parses module field correctly', () => {
     const csv = [
       HEADER,
-      'Core,anytime,BMad Help,BH,,bmad-help,,false,,,,,false,,,',
+      'Core,bmad-help,BMad Help,BH,Get help.,,,anytime,,,false,,',
     ].join('\n');
 
     const items = parseMethodologyCsv(csv);
@@ -90,17 +83,29 @@ describe('parseMethodologyCsv', () => {
   it('parses required=true correctly', () => {
     const csv = [
       HEADER,
-      'BMad Method,3-solutioning,Create Architecture,CA,,bmad-create-architecture,,true,,,,,false,Guided workflow.,planning_artifacts,architecture',
+      'BMad Method,bmad-create-architecture,Create Architecture,CA,Guided workflow.,,,3-solutioning,,,true,planning_artifacts,architecture',
     ].join('\n');
 
     const items = parseMethodologyCsv(csv);
     expect(items[0].required).toBe(true);
+    expect(items[0].priority).toBe('required');
+  });
+
+  it('parses required=recommended correctly', () => {
+    const csv = [
+      HEADER,
+      'BMad Method,bmad-domain-research,Domain Research,DR,Deep dive.,,,1-analysis,,,recommended,planning_artifacts,research',
+    ].join('\n');
+
+    const items = parseMethodologyCsv(csv);
+    expect(items[0].required).toBe(false);
+    expect(items[0].priority).toBe('recommended');
   });
 
   it('handles CSV with quoted fields containing commas', () => {
     const csv = [
       HEADER,
-      'BMad Method,anytime,Quick Dev,QQ,,bmad-quick-dev,,false,,,,,false,"Unified intent-in, code-out workflow.",implementation_artifacts,spec',
+      'BMad Method,bmad-quick-dev,Quick Dev,QQ,"Unified intent-in, code-out workflow.",,,anytime,,,false,implementation_artifacts,spec',
     ].join('\n');
 
     const items = parseMethodologyCsv(csv);
@@ -112,8 +117,19 @@ describe('parseMethodologyCsv', () => {
   });
 
   it('skips blank lines', () => {
-    const csv = [HEADER, '', 'BMad Method,anytime,Help,BH,,bmad-help,,false,,,,,false,,,', ''].join('\n');
+    const csv = [HEADER, '', 'BMad Method,bmad-help,Help,BH,,,anytime,,,false,,', ''].join('\n');
     const items = parseMethodologyCsv(csv);
     expect(items).toHaveLength(1);
+  });
+
+  it('uses phase from col(7) correctly', () => {
+    const csv = [
+      HEADER,
+      'BMad Method,bmad-create-prd,Create PRD,CP,Expert led facilitation.,,,2-planning,,,true,planning_artifacts,prd',
+    ].join('\n');
+
+    const items = parseMethodologyCsv(csv);
+    expect(items[0].phase).toBe('2-planning');
+    expect(items[0].skill).toBe('bmad-create-prd');
   });
 });

@@ -1,4 +1,4 @@
-import type { MethodologyResponse, MethodologySection } from './types.js';
+import type { MethodologyResponse, MethodologySection, MethodologyPriority } from './types.js';
 
 interface TC { bg: string; surface: string; border: string; text: string; muted: string; accent: string; dim: string; green: string; yellow: string; red: string; }
 
@@ -9,6 +9,18 @@ const PHASE_ICONS: Record<string, string> = {
   '4-implementation': '💻',
   '1-analysis': '🔍',
   '3-solutioning': '🏗️',
+};
+
+const PRIORITY_COLORS: Record<MethodologyPriority, string> = {
+  required: '#f38ba8',
+  recommended: '#fab387',
+  optional: '#6c7086',
+};
+
+const PRIORITY_LABELS: Record<MethodologyPriority, string> = {
+  required: '必做',
+  recommended: '推荐',
+  optional: '可选',
 };
 
 export function renderMethodologySkeleton(c: TC, mono: string): string {
@@ -50,11 +62,15 @@ function renderCollapsibleGroup(name: string, icon: string, items: import('./typ
   const chevron = `<span class="bf-chevron" style="font-size:0.5rem;margin-right:6px;transition:transform 0.2s;display:inline-block">▶</span>`;
 
   const itemsHtml = items.map(item => {
-    const reqBar = item.required ? `border-left:2px solid ${c.accent};` : '';
+    const color = PRIORITY_COLORS[item.priority];
+    const label = PRIORITY_LABELS[item.priority];
+    const barStyle = `border-left:2px solid ${color};`;
+    const opacity = item.priority === 'optional' ? 'opacity:0.7;' : '';
+    const badge = `<span style="font-size:0.42rem;padding:1px 3px;border-radius:2px;background:${color};color:${item.priority === 'optional' ? c.text : '#1e1e2e'};margin-left:4px;font-weight:700;vertical-align:middle">${label}</span>`;
     const desc = item.description.length > 80 ? item.description.slice(0, 80) + '...' : item.description;
     const codeTag = item.menuCode ? `<span style="color:${c.muted};font-size:0.5rem;margin-left:6px">[${esc(item.menuCode)}]</span>` : '';
-    return `<div class="bf-method-card" data-skill="${esc(item.skill)}" style="padding:6px 8px;margin:3px 0;border:1px solid ${c.border};border-radius:3px;cursor:pointer;${reqBar}transition:background 0.15s" title="点击复制: ${esc(item.skill)}">
-      <div style="font-size:0.62rem;font-weight:600;color:${c.text}">${esc(item.displayName)}${codeTag}</div>
+    return `<div class="bf-method-card" data-skill="${esc(item.skill)}" style="padding:6px 8px;margin:3px 0;border:1px solid ${c.border};border-radius:3px;cursor:pointer;${barStyle}${opacity}transition:background 0.15s" title="点击复制: ${esc(item.skill)}">
+      <div style="font-size:0.62rem;font-weight:600;color:${c.text}">${esc(item.displayName)}${badge}${codeTag}</div>
       ${desc ? `<div style="font-size:0.52rem;color:${c.muted};margin-top:2px;line-height:1.3">${esc(desc)}</div>` : ''}
     </div>`;
   }).join('');

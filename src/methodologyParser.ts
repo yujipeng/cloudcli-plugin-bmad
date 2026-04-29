@@ -1,4 +1,4 @@
-import type { MethodologyItem, MethodologyCategory } from './types.js';
+import type { MethodologyItem, MethodologyCategory, MethodologyPriority } from './types.js';
 
 function parseCsvLine(line: string): string[] {
   const fields: string[] = [];
@@ -32,12 +32,14 @@ function col(fields: string[], index: number): string {
   return (fields[index] ?? '').trim();
 }
 
-function inferCategory(agentName: string, workflowFile: string): MethodologyCategory {
-  if (agentName) return 'agent';
-  if (workflowFile) return 'workflow';
-  return 'tool';
+function parsePriority(raw: string): MethodologyPriority {
+  const v = raw.toLowerCase();
+  if (v === 'true') return 'required';
+  if (v === 'recommended') return 'recommended';
+  return 'optional';
 }
 
+// New 13-column format: module,skill,display-name,menu-code,description,action,args,phase,after,before,required,output-location,outputs
 export function parseMethodologyCsv(csvContent: string): MethodologyItem[] {
   const cleaned = csvContent.replace(/^﻿/, '');
   const lines = cleaned.split('\n').map(l => l.replace(/\r$/, ''));
@@ -49,25 +51,26 @@ export function parseMethodologyCsv(csvContent: string): MethodologyItem[] {
     if (i === 0 && line.startsWith('module,')) continue;
 
     const fields = parseCsvLine(line);
-    const phase = col(fields, 1);
-    if (phase === '_meta') continue;
-    if (!phase) continue;
+    const skill = col(fields, 1);
+    if (skill === '_meta') continue;
+    if (!skill) continue;
 
-    const workflowFile = col(fields, 5);
-    const rawAgentName = col(fields, 8);
     const module = col(fields, 0);
-
-    const isAgentPhase = phase.startsWith('bmad-agent-');
-    const agentName = isAgentPhase ? phase : rawAgentName;
-    const normalizedPhase = isAgentPhase ? 'agent' : phase;
+    const phase = col(fields, 7);
+    const isAgent = skill.startsWith('bmad-agent-');
+    const agentName = isAgent ? skill : '';
+    const normalizedPhase = isAgent ? 'agent' : (phase || 'anytime');
+    const priority = parsePriority(col(fields, 10));
+    const category: MethodologyCategory = isAgent ? 'agent' : (skill ? 'workflow' : 'tool');
 
     items.push({
-      skill: workflowFile || agentName,
+      skill,
       displayName: col(fields, 2) || '',
       menuCode: col(fields, 3) || '',
-      description: col(fields, 13) || '',
-      required: col(fields, 7).toLowerCase() === 'true',
-      category: inferCategory(agentName, workflowFile),
+      description: col(fields, 4) || '',
+      required: priority === 'required',
+      priority,
+      category,
       phase: normalizedPhase,
       module,
       agentName,

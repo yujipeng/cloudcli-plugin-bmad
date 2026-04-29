@@ -347,7 +347,7 @@ function getMethodologyData(projectPath: string): MethodologyResponse {
     }
   }
 
-  const csvPath = path.join(p, '_bmad', '_config', 'bmad-help.csv');
+  const csvPath = path.join(p, '_bmad', 'module-help.csv');
 
   if (!fs.existsSync(path.join(p, '_bmad'))) {
     return { sections: [], warning: 'no bmad directory' };
