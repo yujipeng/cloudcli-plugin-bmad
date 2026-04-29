@@ -14,3 +14,6 @@ node_modules/
 .cursor/
 .gemini/
 _bmad/
+
+# 插件相关目录
+.playwright-mcp/
