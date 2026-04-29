@@ -22,6 +22,54 @@ async function requestJson(urlPath: string): Promise<any> {
   });
 }
 
+async function postJson(urlPath: string, body: Record<string, unknown>): Promise<any> {
+  return new Promise((resolve, reject) => {
+    const payload = JSON.stringify(body);
+    const req = http.request(`http://127.0.0.1:${port}${urlPath}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(payload),
+      },
+    }, (res) => {
+      let data = '';
+      res.on('data', chunk => { data += chunk; });
+      res.on('end', () => {
+        try { resolve(JSON.parse(data)); } catch (e) { reject(e); }
+      });
+    });
+    req.on('error', reject);
+    req.write(payload);
+    req.end();
+  });
+}
+
+async function postRaw(urlPath: string, body: Record<string, unknown>): Promise<{ statusCode: number; body: any }> {
+  return new Promise((resolve, reject) => {
+    const payload = JSON.stringify(body);
+    const req = http.request(`http://127.0.0.1:${port}${urlPath}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(payload),
+      },
+    }, (res) => {
+      let data = '';
+      res.on('data', chunk => { data += chunk; });
+      res.on('end', () => {
+        try {
+          resolve({ statusCode: res.statusCode || 0, body: JSON.parse(data) });
+        } catch (e) {
+          reject(e);
+        }
+      });
+    });
+    req.on('error', reject);
+    req.write(payload);
+    req.end();
+  });
+}
+
 beforeAll(async () => {
   serverProcess = spawn('npx', ['tsx', 'src/server.ts'], {
     cwd: process.cwd(),
@@ -157,6 +205,46 @@ describe('/versions endpoint', () => {
     const data = await requestJson(`/versions?path=${encodeURIComponent(tmpDir)}`);
     expect(data.activeVersionId).toBe('v2');
   });
+
+  it('returns archive capability for non-empty current workspace even before retrospective is done', async () => {
+    makeBmadDir(tmpDir);
+    const planDir = path.join(tmpDir, 'docs', 'planning-artifacts');
+    fs.mkdirSync(planDir, { recursive: true });
+    fs.writeFileSync(path.join(planDir, 'prd.md'), '# PRD');
+
+    const data = await requestJson(`/versions?path=${encodeURIComponent(tmpDir)}`);
+    const current = data.versions.find((v: any) => v.version.kind === 'current');
+
+    expect(current.archiveSuggestion).toMatchObject({
+      enabled: true,
+      archiveMode: 'new',
+      targetVersion: 'v1',
+    });
+  });
+
+  it('returns overwrite archive mode when current workspace was resumed from archived version', async () => {
+    makeBmadDir(tmpDir);
+    const v1Plan = path.join(tmpDir, 'docs', 'v1', 'planning-artifacts');
+    const v1Impl = path.join(tmpDir, 'docs', 'v1', 'implementation-artifacts');
+    const currentPlan = path.join(tmpDir, 'docs', 'planning-artifacts');
+    const currentImpl = path.join(tmpDir, 'docs', 'implementation-artifacts');
+
+    fs.mkdirSync(v1Plan, { recursive: true });
+    fs.mkdirSync(v1Impl, { recursive: true });
+    fs.mkdirSync(currentPlan, { recursive: true });
+    fs.mkdirSync(currentImpl, { recursive: true });
+    fs.writeFileSync(path.join(currentPlan, '.bf-resume-state.json'), JSON.stringify({ archiveMode: 'overwrite', archiveTargetVersionId: 'v1' }));
+    fs.writeFileSync(path.join(currentPlan, 'prd.md'), '# PRD');
+
+    const data = await requestJson(`/versions?path=${encodeURIComponent(tmpDir)}`);
+    const current = data.versions.find((v: any) => v.version.kind === 'current');
+
+    expect(current.archiveSuggestion).toMatchObject({
+      enabled: true,
+      archiveMode: 'overwrite',
+      targetVersion: 'v1',
+    });
+  });
 });
 
 describe('multi-sprint within a version', () => {
@@ -193,6 +281,65 @@ describe('multi-sprint within a version', () => {
     const data = await requestJson(`/versions?path=${encodeURIComponent(tmpDir)}`);
     const v1 = data.versions.find((v: any) => v.version.id === 'v1');
     expect(v1.sprints[1].active).toBe(true);
+  });
+});
+
+describe('continue archived version into current workspace', () => {
+  it('continues an archived version into the current workspace and marks overwrite target', async () => {
+    makeBmadDir(tmpDir);
+    const v1Plan = path.join(tmpDir, 'docs', 'v1', 'planning-artifacts');
+    const v1Impl = path.join(tmpDir, 'docs', 'v1', 'implementation-artifacts');
+    fs.mkdirSync(v1Plan, { recursive: true });
+    fs.mkdirSync(v1Impl, { recursive: true });
+    fs.writeFileSync(path.join(v1Plan, 'prd.md'), '# PRD v1');
+    fs.writeFileSync(path.join(v1Impl, 'sprint-status.yaml'), makeSprintYaml(false));
+
+    const result = await postJson('/version/continue-as-current', {
+      path: tmpDir,
+      sourceVersionId: 'v1',
+    });
+
+    expect(fs.readFileSync(path.join(tmpDir, 'docs', 'planning-artifacts', 'prd.md'), 'utf-8')).toContain('PRD v1');
+    const current = result.versions.find((v: any) => v.version.kind === 'current');
+    expect(current.archiveSuggestion).toMatchObject({ targetVersion: 'v1', archiveMode: 'overwrite' });
+  });
+
+  it('rejects continue-as-current when current workspace already has artifacts', async () => {
+    makeBmadDir(tmpDir);
+    const currentPlan = path.join(tmpDir, 'docs', 'planning-artifacts');
+    const v1Plan = path.join(tmpDir, 'docs', 'v1', 'planning-artifacts');
+    fs.mkdirSync(currentPlan, { recursive: true });
+    fs.mkdirSync(v1Plan, { recursive: true });
+    fs.writeFileSync(path.join(currentPlan, 'prd.md'), '# current');
+    fs.writeFileSync(path.join(v1Plan, 'prd.md'), '# archived');
+
+    const res = await postRaw('/version/continue-as-current', { path: tmpDir, sourceVersionId: 'v1' });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.body.error).toContain('请先归档当前工作区');
+  });
+});
+
+describe('overwrite archive back to original version', () => {
+  it('archives resumed current workspace back into the original version instead of creating a new one', async () => {
+    makeBmadDir(tmpDir);
+    const currentPlan = path.join(tmpDir, 'docs', 'planning-artifacts');
+    const currentImpl = path.join(tmpDir, 'docs', 'implementation-artifacts');
+    const v1Plan = path.join(tmpDir, 'docs', 'v1', 'planning-artifacts');
+    const v1Impl = path.join(tmpDir, 'docs', 'v1', 'implementation-artifacts');
+
+    fs.mkdirSync(currentPlan, { recursive: true });
+    fs.mkdirSync(currentImpl, { recursive: true });
+    fs.mkdirSync(v1Plan, { recursive: true });
+    fs.mkdirSync(v1Impl, { recursive: true });
+    fs.writeFileSync(path.join(currentPlan, 'prd.md'), '# updated v1');
+    fs.writeFileSync(path.join(v1Plan, 'prd.md'), '# old v1');
+    fs.writeFileSync(path.join(currentPlan, '.bf-resume-state.json'), JSON.stringify({ archiveMode: 'overwrite', archiveTargetVersionId: 'v1' }));
+
+    const result = await postJson('/version/archive-current', { path: tmpDir });
+
+    expect(fs.readFileSync(path.join(v1Plan, 'prd.md'), 'utf-8')).toContain('updated v1');
+    expect(result.versions.some((v: any) => v.version.id === 'v2')).toBe(false);
   });
 });
 
