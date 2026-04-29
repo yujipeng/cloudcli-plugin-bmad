@@ -23,6 +23,12 @@ interface I18nStrings {
   archiveDesc: string;
   archiveBtn: string;
   archiveConfirm: string;
+  archiveOverwriteDesc: string;
+  archiveOverwriteBtn: string;
+  archiveEmptyDesc: string;
+  continueBtn: string;
+  continueDesc: string;
+  archiveOverwriteNotice: string;
 }
 
 const I18N: Record<Locale, I18nStrings> = {
@@ -41,10 +47,16 @@ const I18N: Record<Locale, I18nStrings> = {
     sprint: 'Sprint',
     currentIterationNotStarted: '当前迭代尚未开始',
     currentIterationHint: '可从以下命令开始新一轮迭代：',
-    archiveTitle: '当前版本已完成',
+    archiveTitle: '归档当前版本',
     archiveDesc: '可归档为',
     archiveBtn: '归档为',
     archiveConfirm: '确认归档？当前工作区将迁移到历史版本目录，并重建空的当前工作区。',
+    archiveOverwriteDesc: '当前工作区来自',
+    archiveOverwriteBtn: '归档回',
+    archiveEmptyDesc: '当前工作区为空，无可归档内容',
+    continueBtn: '继续为当前版本',
+    continueDesc: '复制到当前工作区继续推进，后续归档将回写到该版本',
+    archiveOverwriteNotice: '归档时将覆盖',
   },
   en: {
     phases: { discovery: 'Discovery', planning: 'Planning', design: 'Design', development: 'Development', retrospective: 'Retrospective' },
@@ -61,10 +73,16 @@ const I18N: Record<Locale, I18nStrings> = {
     sprint: 'Sprint',
     currentIterationNotStarted: 'Current iteration not started',
     currentIterationHint: 'Start a new iteration with:',
-    archiveTitle: 'Current version complete',
+    archiveTitle: 'Archive current version',
     archiveDesc: 'Archive as',
     archiveBtn: 'Archive as',
     archiveConfirm: 'Confirm archive? Current workspace will be moved to a versioned directory and a fresh workspace will be created.',
+    archiveOverwriteDesc: 'Current workspace came from',
+    archiveOverwriteBtn: 'Archive back to',
+    archiveEmptyDesc: 'Current workspace is empty, nothing to archive',
+    continueBtn: 'Continue as current',
+    continueDesc: 'Copy this version into the current workspace and archive back to it later',
+    archiveOverwriteNotice: 'archiving will overwrite',
   },
 };
 
@@ -350,9 +368,23 @@ export function mount(container: HTMLElement, api: PluginAPI): void {
     const archiveSuggestion = ver.archiveSuggestion;
 
     let archiveCardHtml = '';
-    if (archiveSuggestion?.enabled && archiveSuggestion.targetVersion) {
-      const tv = esc(archiveSuggestion.targetVersion);
-      archiveCardHtml = `<div class="bf-up" style="background:${c.dim};border:1px solid ${c.green};border-radius:4px;padding:16px;margin-bottom:20px;animation-delay:0.15s"><div style="font-size:0.6rem;color:${c.green};letter-spacing:0.1em;text-transform:uppercase;margin-bottom:8px">${t.archiveTitle}</div><div style="display:flex;align-items:center;justify-content:space-between"><div style="font-size:0.72rem;color:${c.text}">${t.archiveDesc} ${tv}</div><button id="bf-archive" style="padding:5px 14px;background:${c.green};border:none;color:#fff;font-family:${MONO};font-size:0.65rem;border-radius:3px;cursor:pointer">${t.archiveBtn} ${tv}</button></div></div>`;
+    if (ver.version.kind === 'current' && archiveSuggestion) {
+      const tv = esc(archiveSuggestion.targetVersion || '');
+      const isOverwrite = archiveSuggestion.archiveMode === 'overwrite' && archiveSuggestion.targetVersion;
+      const canArchive = !!archiveSuggestion.enabled && !!archiveSuggestion.targetVersion;
+      const desc = isOverwrite
+        ? `${t.archiveOverwriteDesc} ${tv}, ${t.archiveOverwriteNotice} ${tv}`
+        : canArchive
+          ? `${t.archiveDesc} ${tv}`
+          : (archiveSuggestion.reason || t.archiveEmptyDesc);
+      const btnLabel = isOverwrite
+        ? `${t.archiveOverwriteBtn} ${tv}`
+        : canArchive && archiveSuggestion.targetVersion
+          ? `${t.archiveBtn} ${tv}`
+          : t.archiveBtn;
+      archiveCardHtml = `<div class="bf-up" style="background:${c.dim};border:1px solid ${canArchive ? c.green : c.border};border-radius:4px;padding:16px;margin-bottom:20px;animation-delay:0.15s"><div style="font-size:0.6rem;color:${canArchive ? c.green : c.muted};letter-spacing:0.1em;text-transform:uppercase;margin-bottom:8px">${t.archiveTitle}</div><div style="display:flex;align-items:center;justify-content:space-between;gap:12px"><div style="font-size:0.72rem;color:${c.text}">${desc}</div><button id="bf-archive" ${canArchive ? '' : 'disabled'} style="padding:5px 14px;background:${canArchive ? c.green : c.border};border:none;color:#fff;font-family:${MONO};font-size:0.65rem;border-radius:3px;cursor:${canArchive ? 'pointer' : 'not-allowed'};opacity:${canArchive ? '1' : '0.6'}">${btnLabel}</button></div></div>`;
+    } else if (ver.version.kind === 'archived') {
+      archiveCardHtml = `<div class="bf-up" style="background:${c.dim};border:1px solid ${c.accent};border-radius:4px;padding:16px;margin-bottom:20px;animation-delay:0.15s"><div style="font-size:0.6rem;color:${c.accent};letter-spacing:0.1em;text-transform:uppercase;margin-bottom:8px">${t.version} ${esc(ver.version.label)}</div><div style="display:flex;align-items:center;justify-content:space-between;gap:12px"><div style="font-size:0.72rem;color:${c.text}">${t.continueDesc}</div><button id="bf-continue-version" style="padding:5px 14px;background:${c.accent};border:none;color:#fff;font-family:${MONO};font-size:0.65rem;border-radius:3px;cursor:pointer">${t.continueBtn}</button></div></div>`;
     }
 
     let emptyCurrentHtml = '';
@@ -377,6 +409,22 @@ export function mount(container: HTMLElement, api: PluginAPI): void {
       try {
         const encPath = ctx.project?.path || '';
         const updated = await api.rpc('POST', 'version/archive-current', { path: encPath }) as VersionedResponse;
+        versionedData = updated;
+        activeVersionId = updated.activeVersionId;
+        const av = getActiveVersion();
+        activeSprintNum = av?.activeSprint ?? 0;
+        renderVersioned(ctx);
+      } catch (err) {
+        alert((err as Error).message);
+      }
+    });
+    root.querySelector('#bf-continue-version')?.addEventListener('click', async () => {
+      try {
+        const encPath = ctx.project?.path || '';
+        const updated = await api.rpc('POST', 'version/continue-as-current', {
+          path: encPath,
+          sourceVersionId: ver.version.id,
+        }) as VersionedResponse;
         versionedData = updated;
         activeVersionId = updated.activeVersionId;
         const av = getActiveVersion();

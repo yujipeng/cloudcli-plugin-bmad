@@ -77,6 +77,7 @@ export interface SprintEntry {
 }
 
 export type VersionKind = 'current' | 'archived';
+export type ArchiveMode = 'new' | 'overwrite' | 'disabled';
 
 export interface VersionInfo {
   id: string;
@@ -90,6 +91,7 @@ export interface ArchiveSuggestion {
   enabled: boolean;
   targetVersion?: string;
   reason?: string;
+  archiveMode?: ArchiveMode;
 }
 
 export interface VersionFlowData extends FlowData {

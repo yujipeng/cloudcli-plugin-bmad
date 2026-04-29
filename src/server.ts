@@ -5,7 +5,7 @@ import type {
   Phase, PhaseStatus, PhaseInfo, NextAction,
   StoryStatus, EpicEntry, SprintData, FlowData,
   MethodologyResponse,
-  VersionInfo, VersionFlowData, VersionedResponse, SprintEntry,
+  VersionFlowData, VersionedResponse, SprintEntry,
 } from './types.js';
 import { parseMethodologyCsv } from './methodologyParser.js';
 import { buildMethodologySections } from './methodologyViewModel.js';
@@ -13,6 +13,7 @@ import { scanSkills } from './skillScanner.js';
 import { discoverVersionEntries } from './versionDiscovery.js';
 import { detectArchiveSuggestion } from './archiveSuggestion.js';
 import { archiveCurrentWorkspace } from './archiveExecutor.js';
+import { readResumeState, writeResumeState, clearResumeState } from './versionResumeState.js';
 
 // ── Minimal YAML parser (flat key:value + nested map + comments) ──────
 
@@ -462,7 +463,8 @@ function getVersionedData(projectPath: string): VersionedResponse {
       activeSprint: activeSprint?.sprintNumber ?? 0,
     };
     if (v.kind === 'current') {
-      flowData.archiveSuggestion = detectArchiveSuggestion(flowData, versions);
+      const resumeState = readResumeState(v.planningDir);
+      flowData.archiveSuggestion = detectArchiveSuggestion(flowData, versions, resumeState);
     }
     return flowData;
   });
@@ -476,6 +478,17 @@ function getVersionedData(projectPath: string): VersionedResponse {
   }
 
   return { versions: versionFlows, activeVersionId, unversioned };
+}
+
+function copyDirContents(src: string, dest: string): void {
+  if (!fs.existsSync(src)) return;
+  fs.mkdirSync(dest, { recursive: true });
+  for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
+    const from = path.join(src, entry.name);
+    const to = path.join(dest, entry.name);
+    if (entry.isDirectory()) copyDirContents(from, to);
+    else fs.copyFileSync(from, to);
+  }
 }
 
 // ── HTTP server ───────────────────────────────────────────────────────
@@ -520,19 +533,70 @@ const server = http.createServer((req, res) => {
           return flowData;
         });
         const currentFlow = versionFlows.find(vf => vf.version.kind === 'current')!;
-        const suggestion = detectArchiveSuggestion(currentFlow, versions);
+        const resumeState = readResumeState(planBase);
+        const suggestion = detectArchiveSuggestion(currentFlow, versions, resumeState);
         if (!suggestion.enabled || !suggestion.targetVersion) {
           res.writeHead(409);
           res.end(JSON.stringify({ error: suggestion.reason || 'archive not allowed' }));
           return;
         }
+        const archiveMode = suggestion.archiveMode === 'overwrite' ? 'overwrite' as const : 'new' as const;
         const targetDir = path.join(path.dirname(planBase), suggestion.targetVersion);
-        const result = archiveCurrentWorkspace(planBase, implBase, targetDir);
+        const result = archiveCurrentWorkspace(planBase, implBase, targetDir, archiveMode);
         if (!result.success) {
           res.writeHead(500);
           res.end(JSON.stringify({ error: result.error }));
           return;
         }
+        if (archiveMode === 'overwrite') clearResumeState(planBase);
+        const updated = getVersionedData(p);
+        res.end(JSON.stringify(updated));
+      } catch (err) {
+        const code = (err as Error).message.includes('does not exist') ? 404 : 400;
+        res.writeHead(code);
+        res.end(JSON.stringify({ error: (err as Error).message }));
+      }
+    });
+    return;
+  }
+
+  if (req.method === 'POST' && req.url?.startsWith('/version/continue-as-current')) {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', () => {
+      try {
+        const parsed = body ? JSON.parse(body) : {};
+        const projectPath = parsed.path;
+        const sourceVersionId = parsed.sourceVersionId;
+        if (!projectPath || !sourceVersionId) {
+          res.writeHead(400);
+          res.end(JSON.stringify({ error: 'missing path or sourceVersionId' }));
+          return;
+        }
+        const p = safePath(projectPath);
+        const paths = resolveBmadPaths(p);
+        const planBase = paths?.planningArtifacts || path.join(p, 'docs', 'planning-artifacts');
+        const implBase = paths?.implementationArtifacts || path.join(p, 'docs', 'implementation-artifacts');
+        const versions = discoverVersionEntries(planBase, implBase);
+        const sourceVer = versions.find(v => v.id === sourceVersionId && v.kind === 'archived');
+        if (!sourceVer) {
+          res.writeHead(404);
+          res.end(JSON.stringify({ error: `archived version ${sourceVersionId} not found` }));
+          return;
+        }
+        if (fs.existsSync(planBase) && fs.readdirSync(planBase).some(f => !f.startsWith('.'))) {
+          res.writeHead(409);
+          res.end(JSON.stringify({ error: '请先归档当前工作区，再从历史版本继续推进' }));
+          return;
+        }
+        if (fs.existsSync(implBase) && fs.readdirSync(implBase).some(f => !f.startsWith('.'))) {
+          res.writeHead(409);
+          res.end(JSON.stringify({ error: '请先归档当前工作区，再从历史版本继续推进' }));
+          return;
+        }
+        copyDirContents(sourceVer.planningDir, planBase);
+        copyDirContents(sourceVer.implementationDir, implBase);
+        writeResumeState(planBase, { archiveMode: 'overwrite', archiveTargetVersionId: sourceVersionId });
         const updated = getVersionedData(p);
         res.end(JSON.stringify(updated));
       } catch (err) {
